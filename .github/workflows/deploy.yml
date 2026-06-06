@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 jobs:
-  deploy:
+  inject:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -13,19 +13,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Inyectar token
-        run: sed -i "s|%%GITHUB_TOKEN%%|${{ secrets.STORAGE_TOKEN }}|g" app.js
-
-      - name: Deploy a GitHub Pages
         run: |
+          sed -i "s|%%GITHUB_TOKEN%%|${{ secrets.STORAGE_TOKEN }}|g" app.js
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add app.js
-          git stash
-          git checkout gh-pages 2>/dev/null || git checkout --orphan gh-pages
-          git checkout stash -- app.js
-          cp -r $(git stash show -p | grep "^diff --git" | head -1) . 2>/dev/null || true
-          git stash pop 2>/dev/null || true
-          git checkout main -- index.html styles.css .github
-          git add -A
-          git commit -m "deploy"
-          git push origin gh-pages --force
+          git commit -m "inject token [skip ci]"
+          git push origin main
