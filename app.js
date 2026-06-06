@@ -48,6 +48,7 @@ let objetivoActivo = appConfig.objetivos[0];
 let rol          = null;
 let selectedFile = null;
 let registros    = cargarRegistros();
+let objetivoIdEnProceso = null;
 
 // ═══════════════════════════════════════════════════════════════
 //  GITHUB CONFIG
@@ -162,6 +163,40 @@ function fechaLarga() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  TEMPORIZADORES EN VIVO (BOMBA 💣)
+// ═══════════════════════════════════════════════════════════════
+
+function actualizarTemporizadores() {
+  const ahora = new Date();
+  
+  // Buscamos todos los temporizadores en pantalla
+  document.querySelectorAll('.countdown-timer').forEach(el => {
+    const finHora = parseInt(el.dataset.fin); // Obtenemos la hora de fin guardada en el HTML
+    const fin = new Date();
+    fin.setHours(finHora, 0, 0, 0);
+
+    const diff = fin - ahora; // Diferencia en milisegundos
+
+    if (diff <= 0) {
+      el.innerHTML = '💣 ¡Tiempo agotado!';
+      el.classList.add('countdown-expired');
+    } else {
+      // Calculamos horas, minutos y segundos restantes
+      const h = Math.floor(diff / (1000 * 60 * 60));
+      const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const s = Math.floor((diff % (1000 * 60)) / 1000);
+      
+      // Formateamos para que siempre tenga 2 dígitos (ej: 09:05:02)
+      el.innerHTML = `💣 Quedan ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      el.classList.remove('countdown-expired');
+    }
+  });
+}
+
+// Hacemos que la función corra cada 1 segundo (1000 ms)
+setInterval(actualizarTemporizadores, 1000);
+
+// ═══════════════════════════════════════════════════════════════
 //  PERSISTENCIA LOCAL
 // ═══════════════════════════════════════════════════════════════
 
@@ -267,27 +302,95 @@ function hacerLogin() {
 //  VISTA USUARIO
 // ═══════════════════════════════════════════════════════════════
 
-async function iniciarUsuario() {
-  // day chip
+ async function iniciarUsuario() {
   document.getElementById('user-day-chip').textContent = nombreDia() + ", " + fechaLarga();
   document.getElementById('user-loading').classList.remove('hidden');
-  document.getElementById('objective-card').classList.add('hidden');
+  document.getElementById('user-objectives-container').classList.add('hidden');
   document.getElementById('user-history-section').classList.add('hidden');
 
   await cargarConfigRemota();
 
   document.getElementById('user-loading').classList.add('hidden');
-  document.getElementById('objective-card').classList.remove('hidden');
+  document.getElementById('user-objectives-container').classList.remove('hidden');
   document.getElementById('user-history-section').classList.remove('hidden');
-
-  document.getElementById('obj-title').textContent = objetivoActivo.titulo;
-  document.getElementById('obj-desc').textContent  = objetivoActivo.descripcion;
-  document.getElementById('obj-time').textContent  = `⏰ Horario: ${objetivoActivo.horaInicio}:00 – ${objetivoActivo.horaFin}:00 hs`;
   document.getElementById('user-points-display').textContent = `${totalPuntos()} pts`;
 
-  actualizarEstadoUsuario();
+  // En lugar de actualizar un solo objetivo, llamamos a la función que dibuja la lista
+  renderObjetivosUsuario();
   renderHistorialUsuario();
 }
+
+function renderObjetivosUsuario() {
+  const contenedor = document.getElementById('user-objectives-container');
+  const diaHoy = diaSemanaHoy();
+  
+  // 1. Filtramos los objetivos que incluyen el día de hoy
+  const objetivosDeHoy = appConfig.objetivos.filter(obj => obj.dias.includes(diaHoy));
+
+  // 2. Si no hay objetivos para hoy, mostramos un mensaje
+  if (objetivosDeHoy.length === 0) {
+    contenedor.innerHTML = `
+      <div class="status-box status-rest">
+        <span class="status-icon">😴</span>
+        <p>Día de descanso. ¡No hay objetivos para hoy!</p>
+      </div>`;
+    return;
+  }
+
+  // 3. Si hay objetivos, generamos el HTML para cada uno
+  let htmlTarjetas = '';
+  objetivosDeHoy.forEach(obj => {
+    // Generamos una llave única para este registro (Ej: "2026-06-06_caminata")
+    const registroKey = `${hoyKey()}_${obj.id}`;
+    const registroGuardado = registros[registroKey];
+    
+    // Evaluamos el estado (si ya se envió, si se aprobó, etc.) para ver qué botón mostrar
+    let estadoHTML = '';
+    if (registroGuardado) {
+      if (registroGuardado.estado === 'enviado') estadoHTML = `<p class="status-text-sent">⏳ Esperando aprobación...</p>`;
+      if (registroGuardado.estado === 'aprobado') estadoHTML = `<p class="status-text-ok">✅ ¡Completado! +${CONFIG.PUNTOS_POR_OBJETIVO} pts</p>`;
+      if (registroGuardado.estado === 'rechazado') estadoHTML = `<p class="status-text-bad">❌ Rechazado. ¡Intentá de nuevo!</p>`;
+    } else {
+      // Si no hay registro, mostramos el botón para subir foto
+      estadoHTML = `<button class="btn-primary btn-subir-foto" data-objid="${obj.id}">📷 Subir foto</button>`;
+    }
+
+    // Armamos la tarjeta
+    htmlTarjetas += `
+      <div class="obj-card">
+        <div class="obj-tag">OBJETIVO</div>
+        <h3 class="obj-title">${obj.emoji} ${obj.titulo}</h3>
+        <p class="obj-desc">${obj.descripcion}</p>
+        
+        <div class="countdown-timer" data-fin="${obj.horaFin}">
+          💣 Calculando...
+        </div>
+        
+        <div class="upload-area" style="margin-top: 1rem;">
+          ${estadoHTML}
+        </div>
+      </div>
+    `;
+  });
+
+  // 4. Inyectamos todo el HTML de golpe en el contenedor
+  contenedor.innerHTML = htmlTarjetas;
+}
+
+// Delegación de eventos para los botones dinámicos de subir foto
+document.getElementById('user-objectives-container').addEventListener('click', (e) => {
+  // Verificamos si lo que se clickeó tiene la clase del botón
+  if (e.target.classList.contains('btn-subir-foto')) {
+    // Guardamos el ID del objetivo que el usuario quiere completar
+    objetivoIdEnProceso = e.target.dataset.objid;
+    
+    // Simulamos un clic en el input de archivo oculto para abrir la cámara/galería
+    document.getElementById('photo-input').click();
+  }
+});
+
+
+
 
 function actualizarEstadoUsuario() {
   const key      = hoyKey();
@@ -334,8 +437,6 @@ function actualizarEstadoUsuario() {
   document.getElementById('state-pending').classList.remove('hidden');
 }
 
-document.getElementById('pick-photo-btn').addEventListener('click', () => { document.getElementById('photo-input').click(); });
-
 document.getElementById('photo-input').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
@@ -359,21 +460,45 @@ document.getElementById('change-photo-btn').addEventListener('click', () => {
 });
 
 document.getElementById('send-photo-btn').addEventListener('click', async () => {
-  if (!selectedFile) return;
+  if (!selectedFile || !objetivoIdEnProceso) return;
+  
   const btn    = document.getElementById('send-photo-btn');
   const status = document.getElementById('upload-status');
-  btn.disabled = true; btn.textContent = 'Subiendo...';
-  status.textContent = 'Subiendo foto...'; status.classList.remove('hidden');
+  
+  btn.disabled = true; 
+  btn.textContent = 'Subiendo...';
+  status.textContent = 'Subiendo foto...'; 
+  status.classList.remove('hidden');
+  
   try {
-    const key = hoyKey();
+    // Nueva llave: "2026-06-06_caminata"
+    const key = `${hoyKey()}_${objetivoIdEnProceso}`;
+    
     const url = await subirFotoGitHub(selectedFile, key);
-    registros[key] = { fecha: key, objetivo: objetivoActivo.id, estado: 'enviado', fotoUrl: url, timestamp: Date.now() };
+    
+    // Guardamos el registro con el objetivo correcto
+    registros[key] = { 
+      fecha: key, 
+      objetivo: objetivoIdEnProceso, 
+      estado: 'enviado', 
+      fotoUrl: url, 
+      timestamp: Date.now() 
+    };
     guardarRegistros();
-    actualizarEstadoUsuario();
-    renderHistorialUsuario();
+    
+    // Limpiamos la vista previa y recargamos la lista
+    document.getElementById('preview-wrap').classList.add('hidden');
+    selectedFile = null;
+    objetivoIdEnProceso = null;
+    document.getElementById('photo-input').value = '';
+    
+    // Volvemos a dibujar las tarjetas para que se actualice el estado a "Enviado"
+    renderObjetivosUsuario();
+    
   } catch (err) {
     status.textContent = `Error: ${err.message}`;
-    btn.disabled = false; btn.textContent = 'Reintentar';
+    btn.disabled = false; 
+    btn.textContent = 'Reintentar';
   }
 });
 
