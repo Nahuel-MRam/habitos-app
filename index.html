@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hábitos</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;800&family=Space+Mono&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════ LOGIN ═══════════════════════════════ -->
+  <div id="screen-login" class="screen active">
+    <div class="login-wrap">
+      <div class="login-badge">🏃</div>
+      <h1 class="login-title">Hábitos</h1>
+      <p class="login-sub">Ingresá tu contraseña para continuar</p>
+      <input id="login-input" type="password" placeholder="contraseña..." autocomplete="off" />
+      <button id="login-btn" class="btn-primary">Entrar</button>
+      <p id="login-error" class="error-msg hidden">Contraseña incorrecta</p>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════ USUARIO ══════════════════════════════ -->
+  <div id="screen-user" class="screen">
+
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <span class="top-badge">🏃</span>
+        <span class="top-title">Hábitos</span>
+      </div>
+      <div class="top-bar-right">
+        <span id="user-points-display" class="points-pill">0 pts</span>
+        <button class="btn-ghost" id="logout-user">Salir</button>
+      </div>
+    </header>
+
+    <main class="user-main">
+
+      <!-- Encabezado de día -->
+      <section class="day-header">
+        <p class="day-label" id="user-day-label">Hoy</p>
+        <h2 class="day-title" id="user-date-title">—</h2>
+      </section>
+
+      <!-- Objetivo del día -->
+      <section id="objective-card" class="obj-card">
+        <div class="obj-tag">OBJETIVO DEL DÍA</div>
+        <h3 class="obj-title" id="obj-title">Caminata diaria</h3>
+        <p class="obj-desc" id="obj-desc">Salí a caminar y sacá una foto del lugar al que llegaste.</p>
+        <div class="obj-time" id="obj-time">⏰ Horario: 7:00 – 9:00 hs</div>
+
+        <!-- Estado: pendiente -->
+        <div id="state-pending" class="upload-area">
+          <p class="upload-hint">📷 Subí tu foto para completar el objetivo</p>
+          <input type="file" id="photo-input" accept="image/*" capture="environment" hidden />
+          <button class="btn-primary" id="pick-photo-btn">Elegir foto</button>
+          <div id="preview-wrap" class="preview-wrap hidden">
+            <img id="photo-preview" src="" alt="preview" />
+            <button class="btn-primary" id="send-photo-btn">Enviar foto ✓</button>
+            <button class="btn-ghost" id="change-photo-btn">Cambiar</button>
+          </div>
+          <p id="upload-status" class="upload-status hidden"></p>
+        </div>
+
+        <!-- Estado: enviado (esperando aprobación) -->
+        <div id="state-sent" class="status-box status-sent hidden">
+          <span class="status-icon">⏳</span>
+          <p>Foto enviada. Esperando aprobación...</p>
+        </div>
+
+        <!-- Estado: aprobado -->
+        <div id="state-approved" class="status-box status-ok hidden">
+          <span class="status-icon">✅</span>
+          <p>¡Objetivo completado! +10 puntos</p>
+        </div>
+
+        <!-- Estado: rechazado -->
+        <div id="state-rejected" class="status-box status-bad hidden">
+          <span class="status-icon">❌</span>
+          <p>Foto rechazada. Intentá de nuevo.</p>
+        </div>
+
+        <!-- Fuera de horario -->
+        <div id="state-out-of-time" class="status-box status-warn hidden">
+          <span class="status-icon">🕐</span>
+          <p id="out-of-time-msg">El horario de entrega ya pasó para hoy.</p>
+        </div>
+
+        <!-- Fin de semana -->
+        <div id="state-weekend" class="status-box status-rest hidden">
+          <span class="status-icon">😴</span>
+          <p>Hoy es día de descanso. ¡Volvé el lunes!</p>
+        </div>
+      </section>
+
+      <!-- Historial -->
+      <section class="history-section">
+        <h4 class="section-label">Historial reciente</h4>
+        <ul id="history-list" class="history-list">
+          <li class="history-empty">Todavía no hay registros.</li>
+        </ul>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ═══════════════════════════════ ADMIN ════════════════════════════════ -->
+  <div id="screen-admin" class="screen">
+
+    <header class="top-bar admin-bar">
+      <div class="top-bar-left">
+        <span class="top-badge">⚙️</span>
+        <span class="top-title">Admin</span>
+      </div>
+      <div class="top-bar-right">
+        <button class="btn-ghost" id="logout-admin">Salir</button>
+      </div>
+    </header>
+
+    <main class="admin-main">
+
+      <section class="admin-header">
+        <h2>Panel de revisión</h2>
+        <p class="admin-sub">Revisá las fotos enviadas y aprobá o rechazá cada objetivo.</p>
+      </section>
+
+      <!-- Pendientes -->
+      <section class="admin-section">
+        <h4 class="section-label">Pendientes de revisión</h4>
+        <div id="pending-list" class="review-list">
+          <p class="empty-msg">No hay fotos pendientes.</p>
+        </div>
+      </section>
+
+      <!-- Historial admin -->
+      <section class="admin-section">
+        <h4 class="section-label">Historial completo</h4>
+        <div id="admin-history-list" class="review-list">
+          <p class="empty-msg">Sin registros aún.</p>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
