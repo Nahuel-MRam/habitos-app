@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-//  CONFIGURACIÓN BASE  ← Solo contraseñas y datos de GitHub
+//  CONFIGURACIÓN BASE
 // ═══════════════════════════════════════════════════════════════
 
 const CONFIG = {
@@ -11,45 +11,43 @@ const CONFIG = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-//  TOKEN  — se guarda en localStorage del admin, nunca en GitHub
+//  TOKEN
 // ═══════════════════════════════════════════════════════════════
 
-function getToken() {
-  return localStorage.getItem('habitos_admin_token') || "";
-}
-
-function setToken(token) {
-  localStorage.setItem('habitos_admin_token', token);
-}
+function getToken() { return localStorage.getItem('habitos_admin_token') || ""; }
+function setToken(t) { localStorage.setItem('habitos_admin_token', t); }
 
 // ═══════════════════════════════════════════════════════════════
-//  CONFIG DINÁMICA  (se carga desde GitHub, editable desde admin)
+//  CONFIG DINÁMICA
 // ═══════════════════════════════════════════════════════════════
+
+const DIAS_SEMANA = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 
 const CONFIG_DEFAULT = {
-  horaInicio: 7,
-  horaFin: 21,
   objetivos: [
     {
       id: "caminata",
       titulo: "Caminata diaria",
       descripcion: "Salí a caminar y sacá una foto del lugar al que llegaste.",
       emoji: "🏃",
+      horaInicio: 7,
+      horaFin: 21,
+      dias: [1,2,3,4,5], // lunes a viernes
     }
   ],
   objetivoActivoId: "caminata",
 };
 
-let appConfig = { ...CONFIG_DEFAULT };
+let appConfig    = JSON.parse(JSON.stringify(CONFIG_DEFAULT));
 let objetivoActivo = appConfig.objetivos[0];
 
 // ═══════════════════════════════════════════════════════════════
 //  ESTADO
 // ═══════════════════════════════════════════════════════════════
 
-let rol = null;
+let rol          = null;
 let selectedFile = null;
-let registros = cargarRegistros();
+let registros    = cargarRegistros();
 
 // ═══════════════════════════════════════════════════════════════
 //  GITHUB CONFIG
@@ -64,26 +62,28 @@ async function cargarConfigRemota() {
       headers: { 'Authorization': `token ${getToken()}` }
     });
     if (!res.ok) return;
-    const data = await res.json();
-    const texto = atob(data.content.replace(/\n/g, ''));
+    const data   = await res.json();
+    const texto  = atob(data.content.replace(/\n/g, ''));
     const parsed = JSON.parse(texto);
     appConfig = { ...CONFIG_DEFAULT, ...parsed };
+    // Migrar objetivos viejos que no tengan días/horario propio
+    appConfig.objetivos = appConfig.objetivos.map(o => ({
+      dias: [1,2,3,4,5],
+      horaInicio: 7,
+      horaFin: 21,
+      ...o,
+    }));
     objetivoActivo = appConfig.objetivos.find(o => o.id === appConfig.objetivoActivoId) || appConfig.objetivos[0];
   } catch (e) {
-    console.warn('No se pudo cargar config remota, usando defaults.', e);
+    console.warn('Config remota no disponible, usando defaults.', e);
   }
 }
 
 async function guardarConfigRemota() {
   let sha = null;
   try {
-    const res = await fetch(CONFIG_URL, {
-      headers: { 'Authorization': `token ${getToken()}` }
-    });
-    if (res.ok) {
-      const data = await res.json();
-      sha = data.sha;
-    }
+    const res = await fetch(CONFIG_URL, { headers: { 'Authorization': `token ${getToken()}` } });
+    if (res.ok) sha = (await res.json()).sha;
   } catch {}
 
   const contenido = btoa(unescape(encodeURIComponent(JSON.stringify(appConfig, null, 2))));
@@ -92,28 +92,39 @@ async function guardarConfigRemota() {
 
   const res = await fetch(CONFIG_URL, {
     method: 'PUT',
-    headers: {
-      'Authorization': `token ${getToken()}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Authorization': `token ${getToken()}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.message || 'Error al guardar config');
-  }
+  if (!res.ok) throw new Error((await res.json()).message || 'Error al guardar');
 }
 
 async function validarToken(token) {
-  const url = `https://api.github.com/repos/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}`;
   try {
-    const res = await fetch(url, {
+    const res = await fetch(`https://api.github.com/repos/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}`, {
       headers: { 'Authorization': `token ${token}` }
     });
     return res.ok;
-  } catch {
-    return false;
+  } catch { return false; }
+}
+
+async function eliminarFotoGitHub(fotoUrl) {
+  // La URL es del tipo: https://raw.githubusercontent.com/user/repo/branch/path
+  // Necesitamos el path para la API
+  try {
+    const match = fotoUrl.match(/raw\.githubusercontent\.com\/[^/]+\/[^/]+\/[^/]+\/(.+)/);
+    if (!match) throw new Error('URL de foto no reconocida');
+    const path = match[1];
+    const apiUrl = `https://api.github.com/repos/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/contents/${path}`;
+    const res = await fetch(apiUrl, { headers: { 'Authorization': `token ${getToken()}` } });
+    if (!res.ok) throw new Error('No se pudo obtener el archivo');
+    const data = await res.json();
+    await fetch(apiUrl, {
+      method: 'DELETE',
+      headers: { 'Authorization': `token ${getToken()}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: `eliminar foto ${path}`, sha: data.sha }),
+    });
+  } catch (e) {
+    console.warn('No se pudo eliminar la foto de GitHub:', e.message);
   }
 }
 
@@ -126,25 +137,23 @@ function hoyKey() {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-function esDiaHabil() {
-  const dia = new Date().getDay();
-  return dia >= 1 && dia <= 5;
+function diaSemanaHoy() { return new Date().getDay(); }
+
+function esDiaActivo() {
+  return objetivoActivo.dias.includes(diaSemanaHoy());
 }
 
 function estaEnHorario() {
   const h = new Date().getHours();
-  return h >= appConfig.horaInicio && h < appConfig.horaFin;
+  return h >= objetivoActivo.horaInicio && h < objetivoActivo.horaFin;
 }
 
 function formatearFecha(key) {
-  const [y, m, d] = key.split('-');
+  const [y,m,d] = key.split('-');
   return `${d}/${m}/${y}`;
 }
 
-function nombreDia() {
-  const dias = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-  return dias[new Date().getDay()];
-}
+function nombreDia() { return DIAS_SEMANA[new Date().getDay()]; }
 
 function fechaLarga() {
   const d = new Date();
@@ -160,15 +169,9 @@ function cargarRegistros() {
   try { return JSON.parse(localStorage.getItem('habitos_registros')) || {}; }
   catch { return {}; }
 }
-
-function guardarRegistros() {
-  localStorage.setItem('habitos_registros', JSON.stringify(registros));
-}
-
+function guardarRegistros() { localStorage.setItem('habitos_registros', JSON.stringify(registros)); }
 function totalPuntos() {
-  return Object.values(registros)
-    .filter(r => r.estado === 'aprobado')
-    .length * CONFIG.PUNTOS_POR_OBJETIVO;
+  return Object.values(registros).filter(r => r.estado === 'aprobado').length * CONFIG.PUNTOS_POR_OBJETIVO;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -180,27 +183,16 @@ async function subirFotoGitHub(file, key) {
     const reader = new FileReader();
     reader.onload = async () => {
       const base64 = reader.result.split(',')[1];
-      const path = `fotos/${key}_${objetivoActivo.id}.jpg`;
-      const url = `https://api.github.com/repos/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/contents/${path}`;
-
+      const path   = `fotos/${key}_${objetivoActivo.id}.jpg`;
+      const url    = `https://api.github.com/repos/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/contents/${path}`;
       try {
         const res = await fetch(url, {
           method: 'PUT',
-          headers: {
-            'Authorization': `token ${getToken()}`,
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Authorization': `token ${getToken()}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: `foto ${key}`, content: base64 }),
         });
-
-        if (!res.ok) {
-          const err = await res.json();
-          reject(new Error(err.message || 'Error al subir'));
-          return;
-        }
-
-        const data = await res.json();
-        resolve(data.content.download_url);
+        if (!res.ok) { reject(new Error((await res.json()).message || 'Error al subir')); return; }
+        resolve((await res.json()).content.download_url);
       } catch (e) { reject(e); }
     };
     reader.onerror = () => reject(new Error('Error al leer el archivo'));
@@ -218,26 +210,19 @@ function mostrarPantalla(id) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  SETUP TOKEN (primera vez como admin)
+//  SETUP TOKEN
 // ═══════════════════════════════════════════════════════════════
 
 document.getElementById('token-btn').addEventListener('click', guardarTokenInicial);
-document.getElementById('token-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') guardarTokenInicial();
-});
+document.getElementById('token-input').addEventListener('keydown', e => { if (e.key === 'Enter') guardarTokenInicial(); });
 
 async function guardarTokenInicial() {
   const token = document.getElementById('token-input').value.trim();
   const error = document.getElementById('token-error');
   const btn   = document.getElementById('token-btn');
-
   if (!token) return;
-
-  btn.disabled = true;
-  btn.textContent = 'Verificando...';
-
+  btn.disabled = true; btn.textContent = 'Verificando...';
   const valido = await validarToken(token);
-
   if (valido) {
     setToken(token);
     document.getElementById('token-input').value = '';
@@ -247,9 +232,7 @@ async function guardarTokenInicial() {
   } else {
     error.classList.remove('hidden');
   }
-
-  btn.disabled = false;
-  btn.textContent = 'Guardar token';
+  btn.disabled = false; btn.textContent = 'Guardar token';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -257,9 +240,7 @@ async function guardarTokenInicial() {
 // ═══════════════════════════════════════════════════════════════
 
 document.getElementById('login-btn').addEventListener('click', hacerLogin);
-document.getElementById('login-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') hacerLogin();
-});
+document.getElementById('login-input').addEventListener('keydown', e => { if (e.key === 'Enter') hacerLogin(); });
 
 function hacerLogin() {
   const pass  = document.getElementById('login-input').value.trim();
@@ -269,22 +250,14 @@ function hacerLogin() {
     rol = 'admin';
     error.classList.add('hidden');
     document.getElementById('login-input').value = '';
-
-    // Si ya tiene token guardado, va directo al panel
-    if (getToken()) {
-      iniciarAdmin();
-      mostrarPantalla('screen-admin');
-    } else {
-      mostrarPantalla('screen-token');
-    }
-
+    if (getToken()) { iniciarAdmin(); mostrarPantalla('screen-admin'); }
+    else { mostrarPantalla('screen-token'); }
   } else if (pass === CONFIG.PASSWORD_USER) {
     rol = 'user';
     error.classList.add('hidden');
     document.getElementById('login-input').value = '';
     mostrarPantalla('screen-user');
     iniciarUsuario();
-
   } else {
     error.classList.remove('hidden');
   }
@@ -295,8 +268,8 @@ function hacerLogin() {
 // ═══════════════════════════════════════════════════════════════
 
 async function iniciarUsuario() {
-  document.getElementById('user-day-label').textContent = nombreDia();
-  document.getElementById('user-date-title').textContent = fechaLarga();
+  // day chip
+  document.getElementById('user-day-chip').textContent = nombreDia() + ", " + fechaLarga();
   document.getElementById('user-loading').classList.remove('hidden');
   document.getElementById('objective-card').classList.add('hidden');
   document.getElementById('user-history-section').classList.add('hidden');
@@ -309,7 +282,7 @@ async function iniciarUsuario() {
 
   document.getElementById('obj-title').textContent = objetivoActivo.titulo;
   document.getElementById('obj-desc').textContent  = objetivoActivo.descripcion;
-  document.getElementById('obj-time').textContent  = `⏰ Horario: ${appConfig.horaInicio}:00 – ${appConfig.horaFin}:00 hs`;
+  document.getElementById('obj-time').textContent  = `⏰ Horario: ${objetivoActivo.horaInicio}:00 – ${objetivoActivo.horaFin}:00 hs`;
   document.getElementById('user-points-display').textContent = `${totalPuntos()} pts`;
 
   actualizarEstadoUsuario();
@@ -320,12 +293,18 @@ function actualizarEstadoUsuario() {
   const key      = hoyKey();
   const registro = registros[key];
 
-  ['state-pending','state-sent','state-approved','state-rejected','state-out-of-time','state-weekend'].forEach(id => {
+  ['state-pending','state-sent','state-approved','state-rejected','state-out-of-time','state-no-objetivo','state-weekend'].forEach(id => {
     document.getElementById(id).classList.add('hidden');
   });
 
-  if (!esDiaHabil()) {
-    document.getElementById('state-weekend').classList.remove('hidden');
+  // Día no activo para este objetivo
+  if (!esDiaActivo()) {
+    const esFinde = diaSemanaHoy() === 0 || diaSemanaHoy() === 6;
+    if (esFinde) {
+      document.getElementById('state-weekend').classList.remove('hidden');
+    } else {
+      document.getElementById('state-no-objetivo').classList.remove('hidden');
+    }
     return;
   }
 
@@ -337,20 +316,16 @@ function actualizarEstadoUsuario() {
       document.getElementById('state-approved-msg').textContent = `¡Objetivo completado! +${CONFIG.PUNTOS_POR_OBJETIVO} puntos`;
       document.getElementById('user-points-display').textContent = `${totalPuntos()} pts`;
     } else if (registro.estado === 'rechazado') {
-      if (estaEnHorario()) {
-        document.getElementById('state-pending').classList.remove('hidden');
-      } else {
-        document.getElementById('state-rejected').classList.remove('hidden');
-      }
+      if (estaEnHorario()) document.getElementById('state-pending').classList.remove('hidden');
+      else document.getElementById('state-rejected').classList.remove('hidden');
     }
     return;
   }
 
   if (!estaEnHorario()) {
-    const msg = document.getElementById('out-of-time-msg');
-    const h   = new Date().getHours();
-    msg.textContent = h < appConfig.horaInicio
-      ? `El horario de entrega empieza a las ${appConfig.horaInicio}:00 hs.`
+    const h = new Date().getHours();
+    document.getElementById('out-of-time-msg').textContent = h < objetivoActivo.horaInicio
+      ? `El horario empieza a las ${objetivoActivo.horaInicio}:00 hs.`
       : `El horario de entrega ya pasó para hoy.`;
     document.getElementById('state-out-of-time').classList.remove('hidden');
     return;
@@ -359,15 +334,12 @@ function actualizarEstadoUsuario() {
   document.getElementById('state-pending').classList.remove('hidden');
 }
 
-document.getElementById('pick-photo-btn').addEventListener('click', () => {
-  document.getElementById('photo-input').click();
-});
+document.getElementById('pick-photo-btn').addEventListener('click', () => { document.getElementById('photo-input').click(); });
 
 document.getElementById('photo-input').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
   selectedFile = file;
-
   const reader = new FileReader();
   reader.onload = ev => {
     document.getElementById('photo-preview').src = ev.target.result;
@@ -388,57 +360,31 @@ document.getElementById('change-photo-btn').addEventListener('click', () => {
 
 document.getElementById('send-photo-btn').addEventListener('click', async () => {
   if (!selectedFile) return;
-
   const btn    = document.getElementById('send-photo-btn');
   const status = document.getElementById('upload-status');
-
-  btn.disabled    = true;
-  btn.textContent = 'Subiendo...';
-  status.textContent = 'Subiendo foto a GitHub...';
-  status.classList.remove('hidden');
-
+  btn.disabled = true; btn.textContent = 'Subiendo...';
+  status.textContent = 'Subiendo foto...'; status.classList.remove('hidden');
   try {
     const key = hoyKey();
     const url = await subirFotoGitHub(selectedFile, key);
-
-    registros[key] = {
-      fecha: key,
-      objetivo: objetivoActivo.id,
-      estado: 'enviado',
-      fotoUrl: url,
-      timestamp: Date.now(),
-    };
+    registros[key] = { fecha: key, objetivo: objetivoActivo.id, estado: 'enviado', fotoUrl: url, timestamp: Date.now() };
     guardarRegistros();
     actualizarEstadoUsuario();
     renderHistorialUsuario();
   } catch (err) {
-    status.textContent  = `Error: ${err.message}`;
-    btn.disabled        = false;
-    btn.textContent     = 'Reintentar';
+    status.textContent = `Error: ${err.message}`;
+    btn.disabled = false; btn.textContent = 'Reintentar';
   }
 });
 
 function renderHistorialUsuario() {
   const lista = document.getElementById('history-list');
   const items = Object.values(registros).sort((a,b) => b.fecha.localeCompare(a.fecha)).slice(0, 7);
-
-  if (items.length === 0) {
-    lista.innerHTML = '<li class="history-empty">Todavía no hay registros.</li>';
-    return;
-  }
-
+  if (items.length === 0) { lista.innerHTML = '<li class="history-empty">Todavía no hay registros.</li>'; return; }
   lista.innerHTML = items.map(r => {
-    const estadoTexto = r.estado === 'aprobado' ? '✅ Aprobado'
-                      : r.estado === 'rechazado' ? '❌ Rechazado'
-                      : '⏳ Pendiente';
-    const estadoClass = r.estado === 'aprobado' ? 'status-text-ok'
-                      : r.estado === 'rechazado' ? 'status-text-bad'
-                      : 'status-text-sent';
-    return `
-      <li class="history-item">
-        <span class="history-date">${formatearFecha(r.fecha)}</span>
-        <span class="history-status ${estadoClass}">${estadoTexto}</span>
-      </li>`;
+    const estadoTexto = r.estado === 'aprobado' ? '✅ Aprobado' : r.estado === 'rechazado' ? '❌ Rechazado' : '⏳ Pendiente';
+    const estadoClass = r.estado === 'aprobado' ? 'status-text-ok' : r.estado === 'rechazado' ? 'status-text-bad' : 'status-text-sent';
+    return `<li class="history-item"><span class="history-date">${formatearFecha(r.fecha)}</span><span class="history-status ${estadoClass}">${estadoTexto}</span></li>`;
   }).join('');
 }
 
@@ -458,51 +404,39 @@ async function iniciarAdmin() {
 function renderAdminPendientes() {
   const contenedor = document.getElementById('pending-list');
   const pendientes = Object.values(registros).filter(r => r.estado === 'enviado');
-
-  if (pendientes.length === 0) {
-    contenedor.innerHTML = '<p class="empty-msg">No hay fotos pendientes.</p>';
-    return;
-  }
-
+  if (pendientes.length === 0) { contenedor.innerHTML = '<p class="empty-msg">No hay fotos pendientes.</p>'; return; }
   contenedor.innerHTML = pendientes.map(r => tarjetaRevision(r, true)).join('');
-  contenedor.querySelectorAll('.btn-approve').forEach(btn => {
-    btn.addEventListener('click', () => aprobarRegistro(btn.dataset.key));
-  });
-  contenedor.querySelectorAll('.btn-reject').forEach(btn => {
-    btn.addEventListener('click', () => rechazarRegistro(btn.dataset.key));
-  });
+  contenedor.querySelectorAll('.btn-approve').forEach(btn => btn.addEventListener('click', () => aprobarRegistro(btn.dataset.key)));
+  contenedor.querySelectorAll('.btn-reject').forEach(btn  => btn.addEventListener('click', () => rechazarRegistro(btn.dataset.key)));
+  contenedor.querySelectorAll('.btn-delete').forEach(btn  => btn.addEventListener('click', () => eliminarRegistro(btn.dataset.key)));
 }
 
 function renderAdminHistorial() {
   const contenedor = document.getElementById('admin-history-list');
-  const todos = Object.values(registros)
-    .filter(r => r.estado !== 'enviado')
-    .sort((a,b) => b.fecha.localeCompare(a.fecha));
-
-  if (todos.length === 0) {
-    contenedor.innerHTML = '<p class="empty-msg">Sin registros revisados aún.</p>';
-    return;
-  }
-
+  const todos = Object.values(registros).filter(r => r.estado !== 'enviado').sort((a,b) => b.fecha.localeCompare(a.fecha));
+  if (todos.length === 0) { contenedor.innerHTML = '<p class="empty-msg">Sin registros revisados aún.</p>'; return; }
   contenedor.innerHTML = todos.map(r => tarjetaRevision(r, false)).join('');
+  contenedor.querySelectorAll('.btn-delete').forEach(btn => btn.addEventListener('click', () => eliminarRegistro(btn.dataset.key)));
 }
 
 function tarjetaRevision(r, conAcciones) {
-  const obj       = appConfig.objetivos.find(o => o.id === r.objetivo) || objetivoActivo;
+  const obj        = appConfig.objetivos.find(o => o.id === r.objetivo) || objetivoActivo;
   const badgeClass = r.estado === 'aprobado' ? 'badge-ok' : r.estado === 'rechazado' ? 'badge-bad' : 'badge-sent';
   const badgeTexto = r.estado === 'aprobado' ? 'Aprobado'  : r.estado === 'rechazado' ? 'Rechazado' : 'Pendiente';
 
-  const acciones = conAcciones ? `
-    <div class="review-card-actions">
-      <button class="btn-approve" data-key="${r.fecha}">✅ Aprobar</button>
-      <button class="btn-reject"  data-key="${r.fecha}">❌ Rechazar</button>
-    </div>` : `
-    <div class="review-card-actions">
-      <span class="review-badge ${badgeClass}">${badgeTexto}</span>
-    </div>`;
+  const acciones = conAcciones
+    ? `<div class="review-card-actions">
+        <button class="btn-approve" data-key="${r.fecha}">✅ Aprobar</button>
+        <button class="btn-reject"  data-key="${r.fecha}">❌ Rechazar</button>
+        <button class="btn-delete"  data-key="${r.fecha}">🗑</button>
+       </div>`
+    : `<div class="review-card-actions">
+        <span class="review-badge ${badgeClass}">${badgeTexto}</span>
+        <button class="btn-delete" data-key="${r.fecha}">🗑 Eliminar</button>
+       </div>`;
 
   return `
-    <div class="review-card">
+    <div class="review-card" id="card-${r.fecha}">
       <div class="review-card-header">
         <span class="review-card-date">${formatearFecha(r.fecha)}</span>
         <span class="review-card-obj">${obj.emoji} ${obj.titulo}</span>
@@ -515,17 +449,23 @@ function tarjetaRevision(r, conAcciones) {
 function aprobarRegistro(key) {
   if (!registros[key]) return;
   registros[key].estado = 'aprobado';
-  guardarRegistros();
-  renderAdminPendientes();
-  renderAdminHistorial();
+  guardarRegistros(); renderAdminPendientes(); renderAdminHistorial();
 }
 
 function rechazarRegistro(key) {
   if (!registros[key]) return;
   registros[key].estado = 'rechazado';
+  guardarRegistros(); renderAdminPendientes(); renderAdminHistorial();
+}
+
+async function eliminarRegistro(key) {
+  if (!confirm(`¿Eliminar el registro del ${formatearFecha(key)}?`)) return;
+  const fotoUrl = registros[key]?.fotoUrl;
+  delete registros[key];
   guardarRegistros();
   renderAdminPendientes();
   renderAdminHistorial();
+  if (fotoUrl) await eliminarFotoGitHub(fotoUrl);
 }
 
 document.getElementById('logout-admin').addEventListener('click', cerrarSesion);
@@ -535,35 +475,89 @@ document.getElementById('logout-admin').addEventListener('click', cerrarSesion);
 // ═══════════════════════════════════════════════════════════════
 
 function renderConfigPanel() {
-  document.getElementById('cfg-hora-inicio').value = appConfig.horaInicio;
-  document.getElementById('cfg-hora-fin').value    = appConfig.horaFin;
   renderListaObjetivos();
   renderSelectActivo();
 }
 
+function checkboxesDias(diasSeleccionados) {
+  return DIAS_SEMANA.map((nombre, i) => {
+    if (i === 0) return ''; // Omitir domingo como opción de inicio (se puede incluir)
+    const checked = diasSeleccionados.includes(i) ? 'checked' : '';
+    return `<label class="dia-check"><input type="checkbox" value="${i}" ${checked} />${nombre.slice(0,3)}</label>`;
+  }).join('');
+}
+
 function renderListaObjetivos() {
   const lista = document.getElementById('cfg-objetivos-lista');
-  if (appConfig.objetivos.length === 0) {
-    lista.innerHTML = '<p class="empty-msg">No hay objetivos cargados.</p>';
-    return;
-  }
+  if (appConfig.objetivos.length === 0) { lista.innerHTML = '<p class="empty-msg">No hay objetivos.</p>'; return; }
 
   lista.innerHTML = appConfig.objetivos.map((o, i) => `
-    <div class="cfg-obj-item">
-      <span class="cfg-obj-emoji">${o.emoji}</span>
-      <div class="cfg-obj-info">
-        <strong>${o.titulo}</strong>
-        <small>${o.descripcion}</small>
+    <div class="cfg-obj-item-full">
+      <div class="cfg-obj-header">
+        <span class="cfg-obj-emoji">${o.emoji}</span>
+        <div class="cfg-obj-info">
+          <strong>${o.titulo}</strong>
+          <small>${o.descripcion}</small>
+        </div>
+        ${appConfig.objetivos.length > 1 ? `<button class="btn-ghost btn-small cfg-eliminar-obj" data-index="${i}">✕</button>` : ''}
       </div>
-      ${appConfig.objetivos.length > 1
-        ? `<button class="btn-ghost btn-small cfg-eliminar-obj" data-index="${i}">✕</button>`
-        : ''}
+      <div class="cfg-obj-horario">
+        <div class="config-row">
+          <div class="config-field">
+            <label>Desde</label>
+            <input type="number" class="cfg-obj-inicio" data-index="${i}" min="0" max="23" value="${o.horaInicio}" />
+            <span class="config-unit">hs</span>
+          </div>
+          <div class="config-field">
+            <label>Hasta</label>
+            <input type="number" class="cfg-obj-fin" data-index="${i}" min="0" max="23" value="${o.horaFin}" />
+            <span class="config-unit">hs</span>
+          </div>
+        </div>
+        <div class="dias-wrap">${checkboxesDias(o.dias)}</div>
+        <button class="btn-primary cfg-guardar-obj" data-index="${i}">Guardar cambios</button>
+        <p class="config-status hidden cfg-obj-save-status-${i}"></p>
+      </div>
     </div>
   `).join('');
 
   lista.querySelectorAll('.cfg-eliminar-obj').forEach(btn => {
     btn.addEventListener('click', () => eliminarObjetivo(parseInt(btn.dataset.index)));
   });
+
+  lista.querySelectorAll('.cfg-guardar-obj').forEach(btn => {
+    btn.addEventListener('click', () => guardarCambiosObjetivo(parseInt(btn.dataset.index)));
+  });
+}
+
+async function guardarCambiosObjetivo(index) {
+  const obj    = appConfig.objetivos[index];
+  const inicio = parseInt(document.querySelector(`.cfg-obj-inicio[data-index="${index}"]`).value);
+  const fin    = parseInt(document.querySelector(`.cfg-obj-fin[data-index="${index}"]`).value);
+  const dias   = [...document.querySelectorAll(`.cfg-obj-item-full:nth-child(${index+1}) .dias-wrap input:checked`)].map(cb => parseInt(cb.value));
+  const status = document.querySelector(`.cfg-obj-save-status-${index}`);
+
+  if (isNaN(inicio) || isNaN(fin) || inicio >= fin) {
+    mostrarStatus(status, '❌ Horario inválido.', false); return;
+  }
+  if (dias.length === 0) {
+    mostrarStatus(status, '❌ Seleccioná al menos un día.', false); return;
+  }
+
+  obj.horaInicio = inicio;
+  obj.horaFin    = fin;
+  obj.dias       = dias;
+
+  const btn = document.querySelector(`.cfg-guardar-obj[data-index="${index}"]`);
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  try {
+    await guardarConfigRemota();
+    mostrarStatus(status, '✅ Guardado.', true);
+  } catch (e) {
+    mostrarStatus(status, `❌ ${e.message}`, false);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Guardar cambios';
+  }
 }
 
 function renderSelectActivo() {
@@ -573,130 +567,75 @@ function renderSelectActivo() {
   ).join('');
 }
 
-document.getElementById('cfg-guardar-horario').addEventListener('click', async () => {
-  const inicio = parseInt(document.getElementById('cfg-hora-inicio').value);
-  const fin    = parseInt(document.getElementById('cfg-hora-fin').value);
-  const status = document.getElementById('cfg-horario-status');
-
-  if (isNaN(inicio) || isNaN(fin) || inicio >= fin || inicio < 0 || fin > 23) {
-    mostrarStatus(status, '❌ Horario inválido. Inicio debe ser menor que fin (0-23).', false);
-    return;
-  }
-
-  appConfig.horaInicio = inicio;
-  appConfig.horaFin    = fin;
-
-  try {
-    document.getElementById('cfg-guardar-horario').disabled    = true;
-    document.getElementById('cfg-guardar-horario').textContent = 'Guardando...';
-    await guardarConfigRemota();
-    mostrarStatus(status, `✅ Horario guardado: ${inicio}:00 – ${fin}:00 hs`, true);
-  } catch (e) {
-    mostrarStatus(status, `❌ Error: ${e.message}`, false);
-  } finally {
-    document.getElementById('cfg-guardar-horario').disabled    = false;
-    document.getElementById('cfg-guardar-horario').textContent = 'Guardar horario';
-  }
-});
-
 document.getElementById('cfg-agregar-obj').addEventListener('click', async () => {
   const emoji  = document.getElementById('cfg-obj-emoji').value.trim();
   const titulo = document.getElementById('cfg-obj-titulo').value.trim();
   const desc   = document.getElementById('cfg-obj-desc').value.trim();
+  const inicio = parseInt(document.getElementById('cfg-obj-inicio').value);
+  const fin    = parseInt(document.getElementById('cfg-obj-fin').value);
+  const dias   = [...document.querySelectorAll('#cfg-nuevo-dias input:checked')].map(cb => parseInt(cb.value));
   const status = document.getElementById('cfg-obj-status');
 
-  if (!emoji || !titulo || !desc) {
-    mostrarStatus(status, '❌ Completá todos los campos.', false);
-    return;
-  }
+  if (!emoji || !titulo || !desc) { mostrarStatus(status, '❌ Completá todos los campos.', false); return; }
+  if (isNaN(inicio) || isNaN(fin) || inicio >= fin) { mostrarStatus(status, '❌ Horario inválido.', false); return; }
+  if (dias.length === 0) { mostrarStatus(status, '❌ Seleccioná al menos un día.', false); return; }
 
   const id = titulo.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-  if (appConfig.objetivos.find(o => o.id === id)) {
-    mostrarStatus(status, '❌ Ya existe un objetivo con ese nombre.', false);
-    return;
-  }
+  if (appConfig.objetivos.find(o => o.id === id)) { mostrarStatus(status, '❌ Ya existe ese objetivo.', false); return; }
 
-  appConfig.objetivos.push({ id, titulo, descripcion: desc, emoji });
-
+  appConfig.objetivos.push({ id, titulo, descripcion: desc, emoji, horaInicio: inicio, horaFin: fin, dias });
+  const btn = document.getElementById('cfg-agregar-obj');
+  btn.disabled = true; btn.textContent = 'Guardando...';
   try {
-    document.getElementById('cfg-agregar-obj').disabled    = true;
-    document.getElementById('cfg-agregar-obj').textContent = 'Guardando...';
     await guardarConfigRemota();
     document.getElementById('cfg-obj-emoji').value  = '';
     document.getElementById('cfg-obj-titulo').value = '';
     document.getElementById('cfg-obj-desc').value   = '';
+    document.getElementById('cfg-obj-inicio').value = '7';
+    document.getElementById('cfg-obj-fin').value    = '21';
+    document.querySelectorAll('#cfg-nuevo-dias input').forEach(cb => { cb.checked = [1,2,3,4,5].includes(parseInt(cb.value)); });
     renderListaObjetivos();
     renderSelectActivo();
     mostrarStatus(status, '✅ Objetivo agregado.', true);
   } catch (e) {
     appConfig.objetivos.pop();
-    mostrarStatus(status, `❌ Error: ${e.message}`, false);
+    mostrarStatus(status, `❌ ${e.message}`, false);
   } finally {
-    document.getElementById('cfg-agregar-obj').disabled    = false;
-    document.getElementById('cfg-agregar-obj').textContent = 'Agregar objetivo';
+    btn.disabled = false; btn.textContent = 'Agregar objetivo';
   }
 });
 
 async function eliminarObjetivo(index) {
   const obj = appConfig.objetivos[index];
-  if (obj.id === appConfig.objetivoActivoId) {
-    alert('No podés eliminar el objetivo activo. Cambiá el activo primero.');
-    return;
-  }
+  if (obj.id === appConfig.objetivoActivoId) { alert('No podés eliminar el objetivo activo.'); return; }
   if (!confirm(`¿Eliminar "${obj.titulo}"?`)) return;
-
   const eliminado = appConfig.objetivos.splice(index, 1)[0];
-  try {
-    await guardarConfigRemota();
-    renderListaObjetivos();
-    renderSelectActivo();
-  } catch (e) {
-    appConfig.objetivos.splice(index, 0, eliminado);
-    alert(`Error al eliminar: ${e.message}`);
-  }
+  try { await guardarConfigRemota(); renderListaObjetivos(); renderSelectActivo(); }
+  catch (e) { appConfig.objetivos.splice(index, 0, eliminado); alert(`Error: ${e.message}`); }
 }
 
 document.getElementById('cfg-guardar-activo').addEventListener('click', async () => {
   const id     = document.getElementById('cfg-objetivo-activo').value;
   const status = document.getElementById('cfg-activo-status');
-
   appConfig.objetivoActivoId = id;
   objetivoActivo = appConfig.objetivos.find(o => o.id === id) || appConfig.objetivos[0];
-
-  try {
-    document.getElementById('cfg-guardar-activo').disabled    = true;
-    document.getElementById('cfg-guardar-activo').textContent = 'Guardando...';
-    await guardarConfigRemota();
-    mostrarStatus(status, `✅ Objetivo activo: ${objetivoActivo.emoji} ${objetivoActivo.titulo}`, true);
-  } catch (e) {
-    mostrarStatus(status, `❌ Error: ${e.message}`, false);
-  } finally {
-    document.getElementById('cfg-guardar-activo').disabled    = false;
-    document.getElementById('cfg-guardar-activo').textContent = 'Guardar';
-  }
+  const btn = document.getElementById('cfg-guardar-activo');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  try { await guardarConfigRemota(); mostrarStatus(status, `✅ Activo: ${objetivoActivo.emoji} ${objetivoActivo.titulo}`, true); }
+  catch (e) { mostrarStatus(status, `❌ ${e.message}`, false); }
+  finally { btn.disabled = false; btn.textContent = 'Guardar'; }
 });
 
 document.getElementById('cfg-guardar-token').addEventListener('click', async () => {
   const token  = document.getElementById('cfg-token-input').value.trim();
   const status = document.getElementById('cfg-token-status');
-
   if (!token) return;
-
-  document.getElementById('cfg-guardar-token').disabled    = true;
-  document.getElementById('cfg-guardar-token').textContent = 'Verificando...';
-
+  const btn = document.getElementById('cfg-guardar-token');
+  btn.disabled = true; btn.textContent = 'Verificando...';
   const valido = await validarToken(token);
-
-  if (valido) {
-    setToken(token);
-    document.getElementById('cfg-token-input').value = '';
-    mostrarStatus(status, '✅ Token actualizado.', true);
-  } else {
-    mostrarStatus(status, '❌ Token inválido o sin acceso al repo.', false);
-  }
-
-  document.getElementById('cfg-guardar-token').disabled    = false;
-  document.getElementById('cfg-guardar-token').textContent = 'Actualizar token';
+  if (valido) { setToken(token); document.getElementById('cfg-token-input').value = ''; mostrarStatus(status, '✅ Token actualizado.', true); }
+  else { mostrarStatus(status, '❌ Token inválido.', false); }
+  btn.disabled = false; btn.textContent = 'Actualizar token';
 });
 
 function mostrarStatus(el, msg, ok) {
@@ -710,8 +649,4 @@ function mostrarStatus(el, msg, ok) {
 //  LOGOUT
 // ═══════════════════════════════════════════════════════════════
 
-function cerrarSesion() {
-  rol          = null;
-  selectedFile = null;
-  mostrarPantalla('screen-login');
-}
+function cerrarSesion() { rol = null; selectedFile = null; mostrarPantalla('screen-login'); }
