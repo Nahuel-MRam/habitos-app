@@ -664,34 +664,3 @@ body {
 ═══════════════════════════════════════════════ */
 .hidden     { display: none !important; }
 .error-msg  { color: var(--bad); font-size: .83rem; text-align: center; }
-/* ═══════════════════════════════════════════════
-   LISTA DE OBJETIVOS Y TEMPORIZADOR
-═══════════════════════════════════════════════ */
-.objectives-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1.2rem;
-  width: 100%;
-}
-
-.countdown-timer {
-  font-size: 0.85rem;
-  color: var(--warn);
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.5rem;
-  background: rgba(240, 192, 96, 0.1);
-  padding: 0.4rem 0.8rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid rgba(240, 192, 96, 0.2);
-  width: fit-content;
-}
-
-/* Estado cuando el tiempo se acaba */
-.countdown-expired {
-  color: var(--bad);
-  background: rgba(239, 68, 68, 0.1);
-  border-color: rgba(239, 68, 68, 0.2);
-}
