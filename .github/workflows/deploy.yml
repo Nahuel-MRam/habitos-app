@@ -5,18 +5,15 @@ on:
     branches: [main]
 
 jobs:
-  inject:
+  deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Inyectar token
-        run: |
-          sed -i "s|%%GITHUB_TOKEN%%|${{ secrets.STORAGE_TOKEN }}|g" app.js
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add app.js
-          git commit -m "inject token [skip ci]"
-          git push origin main
+      - name: Deploy a GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./
