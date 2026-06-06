@@ -3,8 +3,8 @@
 // ═══════════════════════════════════════════════════════════════
 
 const CONFIG = {
-  PASSWORD_USER:  "caminata2025",
-  PASSWORD_ADMIN: "admin_habitos_2025",
+  PASSWORD_USER:  "soyfeliz",
+  PASSWORD_ADMIN: "admin",
   GITHUB_USER:    "Nahuel-MRam",
   GITHUB_REPO:    "habitos-storage",
   PUNTOS_POR_OBJETIVO: 10,
