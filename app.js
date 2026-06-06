@@ -1,56 +1,99 @@
 // ═══════════════════════════════════════════════════════════════
-//  CONFIGURACIÓN  ← Editá estos valores antes de usar la app
+//  CONFIGURACIÓN BASE  ← Solo contraseñas y credenciales GitHub
 // ═══════════════════════════════════════════════════════════════
 
 const CONFIG = {
-  // Contraseñas de acceso
-  PASSWORD_USER:  "soyadulto",       // Contraseña del usuario (tu amigo)
-  PASSWORD_ADMIN: "admin2026", // Contraseña del admin (vos)
-
-  // GitHub storage
-  GITHUB_TOKEN: "%%GITHUB_TOKEN%%",  // ← placeholder, se reemplaza en el deploy  GITHUB_USER:    "Nahuel-MRam",       // Tu usuario de GitHub
-  GITHUB_REPO:    "habitos-storage",   // Nombre del repo que creaste
-
-  // Horario permitido para subir la foto (formato 24hs)
-  HORA_INICIO: 9,   // 9:00 hs
-  HORA_FIN:    24,  //  10:00 hs  ← ajustá al horario real cuando quieras
-
-  // Puntos por objetivo aprobado
+  PASSWORD_USER:  "soyadulto",
+  PASSWORD_ADMIN: "admin2026",
+  GITHUB_TOKEN:   "%%GITHUB_TOKEN%%",
+  GITHUB_USER:    "Nahuel-MRam",
+  GITHUB_REPO:    "habitos-storage",
   PUNTOS_POR_OBJETIVO: 10,
 };
 
 // ═══════════════════════════════════════════════════════════════
-//  OBJETIVOS  ← Acá agregás más a medida que pase el tiempo
+//  CONFIG DINÁMICA  (se carga desde GitHub, editable desde admin)
 // ═══════════════════════════════════════════════════════════════
 
-const OBJETIVOS = [
-  {
-    id: "caminata",
-    titulo: "Caminata diaria",
-    descripcion: "Salí a caminar y sacá una foto del árbol de tu casa.",
-    horario: `${CONFIG.HORA_INICIO}:00 – ${CONFIG.HORA_FIN}:00 hs`,
-    emoji: "🏃",
-  },
-  // Ejemplo de cómo agregar más objetivos en el futuro:
-  // {
-  //   id: "lectura",
-  //   titulo: "Leer 20 minutos",
-  //   descripcion: "Leé algo y sacá una foto del libro o la pantalla.",
-  //   horario: "20:00 – 23:00 hs",
-  //   emoji: "📖",
-  // },
-];
+const CONFIG_DEFAULT = {
+  horaInicio: 7,
+  horaFin: 21,
+  objetivos: [
+    {
+      id: "caminata",
+      titulo: "Caminata diaria",
+      descripcion: "Salí a caminar y sacá una foto del lugar al que llegaste.",
+      emoji: "🏃",
+    }
+  ],
+  objetivoActivoId: "caminata",
+};
 
-// Objetivo activo (por ahora siempre es el primero)
-const OBJETIVO_ACTIVO = OBJETIVOS[0];
+let appConfig = { ...CONFIG_DEFAULT };
+let objetivoActivo = appConfig.objetivos[0];
 
 // ═══════════════════════════════════════════════════════════════
-//  ESTADO DE LA APP
+//  ESTADO
 // ═══════════════════════════════════════════════════════════════
 
-let rol = null; // "user" | "admin"
+let rol = null;
 let selectedFile = null;
 let registros = cargarRegistros();
+
+// ═══════════════════════════════════════════════════════════════
+//  GITHUB CONFIG — leer y guardar config.json en habitos-storage
+// ═══════════════════════════════════════════════════════════════
+
+const CONFIG_PATH = "config.json";
+const CONFIG_URL  = `https://api.github.com/repos/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/contents/${CONFIG_PATH}`;
+
+async function cargarConfigRemota() {
+  try {
+    const res = await fetch(CONFIG_URL, {
+      headers: { 'Authorization': `token ${CONFIG.GITHUB_TOKEN}` }
+    });
+    if (!res.ok) return; // Si no existe aún, usa defaults
+    const data = await res.json();
+    const texto = atob(data.content.replace(/\n/g, ''));
+    const parsed = JSON.parse(texto);
+    appConfig = { ...CONFIG_DEFAULT, ...parsed };
+    objetivoActivo = appConfig.objetivos.find(o => o.id === appConfig.objetivoActivoId) || appConfig.objetivos[0];
+  } catch (e) {
+    console.warn('No se pudo cargar config remota, usando defaults.', e);
+  }
+}
+
+async function guardarConfigRemota() {
+  // Necesitamos el SHA del archivo si ya existe (para actualizarlo)
+  let sha = null;
+  try {
+    const res = await fetch(CONFIG_URL, {
+      headers: { 'Authorization': `token ${CONFIG.GITHUB_TOKEN}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      sha = data.sha;
+    }
+  } catch {}
+
+  const contenido = btoa(unescape(encodeURIComponent(JSON.stringify(appConfig, null, 2))));
+  const body = { message: 'actualizar config', content: contenido };
+  if (sha) body.sha = sha;
+
+  const res = await fetch(CONFIG_URL, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `token ${CONFIG.GITHUB_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.message || 'Error al guardar config');
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════
 //  HELPERS DE FECHA
@@ -62,13 +105,13 @@ function hoyKey() {
 }
 
 function esDiaHabil() {
-  const dia = new Date().getDay(); // 0=Dom, 6=Sab
+  const dia = new Date().getDay();
   return dia >= 1 && dia <= 5;
 }
 
 function estaEnHorario() {
   const h = new Date().getHours();
-  return h >= CONFIG.HORA_INICIO && h < CONFIG.HORA_FIN;
+  return h >= appConfig.horaInicio && h < appConfig.horaFin;
 }
 
 function formatearFecha(key) {
@@ -107,7 +150,7 @@ function totalPuntos() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  GITHUB API
+//  GITHUB — subir foto
 // ═══════════════════════════════════════════════════════════════
 
 async function subirFotoGitHub(file, key) {
@@ -115,7 +158,7 @@ async function subirFotoGitHub(file, key) {
     const reader = new FileReader();
     reader.onload = async () => {
       const base64 = reader.result.split(',')[1];
-      const path = `fotos/${key}_${OBJETIVO_ACTIVO.id}.jpg`;
+      const path = `fotos/${key}_${objetivoActivo.id}.jpg`;
       const url = `https://api.github.com/repos/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}/contents/${path}`;
 
       try {
@@ -125,10 +168,7 @@ async function subirFotoGitHub(file, key) {
             'Authorization': `token ${CONFIG.GITHUB_TOKEN}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            message: `foto ${key}`,
-            content: base64,
-          }),
+          body: JSON.stringify({ message: `foto ${key}`, content: base64 }),
         });
 
         if (!res.ok) {
@@ -139,9 +179,7 @@ async function subirFotoGitHub(file, key) {
 
         const data = await res.json();
         resolve(data.content.download_url);
-      } catch (e) {
-        reject(e);
-      }
+      } catch (e) { reject(e); }
     };
     reader.onerror = () => reject(new Error('Error al leer el archivo'));
     reader.readAsDataURL(file);
@@ -173,13 +211,13 @@ function hacerLogin() {
   if (pass === CONFIG.PASSWORD_ADMIN) {
     rol = 'admin';
     error.classList.add('hidden');
-    iniciarAdmin();
     mostrarPantalla('screen-admin');
+    iniciarAdmin();
   } else if (pass === CONFIG.PASSWORD_USER) {
     rol = 'user';
     error.classList.add('hidden');
-    iniciarUsuario();
     mostrarPantalla('screen-user');
+    iniciarUsuario();
   } else {
     error.classList.remove('hidden');
   }
@@ -191,23 +229,25 @@ function hacerLogin() {
 //  VISTA USUARIO
 // ═══════════════════════════════════════════════════════════════
 
-function iniciarUsuario() {
-  // Fecha
+async function iniciarUsuario() {
   document.getElementById('user-day-label').textContent = nombreDia();
   document.getElementById('user-date-title').textContent = fechaLarga();
+  document.getElementById('user-loading').classList.remove('hidden');
+  document.getElementById('objective-card').classList.add('hidden');
+  document.getElementById('user-history-section').classList.add('hidden');
 
-  // Objetivo
-  document.getElementById('obj-title').textContent = OBJETIVO_ACTIVO.titulo;
-  document.getElementById('obj-desc').textContent = OBJETIVO_ACTIVO.descripcion;
-  document.getElementById('obj-time').textContent = `⏰ Horario: ${OBJETIVO_ACTIVO.horario}`;
+  await cargarConfigRemota();
 
-  // Puntos
+  document.getElementById('user-loading').classList.add('hidden');
+  document.getElementById('objective-card').classList.remove('hidden');
+  document.getElementById('user-history-section').classList.remove('hidden');
+
+  document.getElementById('obj-title').textContent = objetivoActivo.titulo;
+  document.getElementById('obj-desc').textContent = objetivoActivo.descripcion;
+  document.getElementById('obj-time').textContent = `⏰ Horario: ${appConfig.horaInicio}:00 – ${appConfig.horaFin}:00 hs`;
   document.getElementById('user-points-display').textContent = `${totalPuntos()} pts`;
 
-  // Estado del día
   actualizarEstadoUsuario();
-
-  // Historial
   renderHistorialUsuario();
 }
 
@@ -215,26 +255,23 @@ function actualizarEstadoUsuario() {
   const key = hoyKey();
   const registro = registros[key];
 
-  // Ocultar todos los estados
   ['state-pending','state-sent','state-approved','state-rejected','state-out-of-time','state-weekend'].forEach(id => {
     document.getElementById(id).classList.add('hidden');
   });
 
-  // Fin de semana
   if (!esDiaHabil()) {
     document.getElementById('state-weekend').classList.remove('hidden');
     return;
   }
 
-  // Ya tiene registro
   if (registro) {
     if (registro.estado === 'enviado') {
       document.getElementById('state-sent').classList.remove('hidden');
     } else if (registro.estado === 'aprobado') {
       document.getElementById('state-approved').classList.remove('hidden');
+      document.getElementById('state-approved-msg').textContent = `¡Objetivo completado! +${CONFIG.PUNTOS_POR_OBJETIVO} puntos`;
       document.getElementById('user-points-display').textContent = `${totalPuntos()} pts`;
     } else if (registro.estado === 'rechazado') {
-      // Si fue rechazado puede volver a intentarlo si está en horario
       if (estaEnHorario()) {
         document.getElementById('state-pending').classList.remove('hidden');
       } else {
@@ -244,20 +281,16 @@ function actualizarEstadoUsuario() {
     return;
   }
 
-  // Sin registro: verificar horario
   if (!estaEnHorario()) {
     const msg = document.getElementById('out-of-time-msg');
     const h = new Date().getHours();
-    if (h < CONFIG.HORA_INICIO) {
-      msg.textContent = `El horario de entrega empieza a las ${CONFIG.HORA_INICIO}:00 hs.`;
-    } else {
-      msg.textContent = `El horario de entrega ya pasó para hoy.`;
-    }
+    msg.textContent = h < appConfig.horaInicio
+      ? `El horario de entrega empieza a las ${appConfig.horaInicio}:00 hs.`
+      : `El horario de entrega ya pasó para hoy.`;
     document.getElementById('state-out-of-time').classList.remove('hidden');
     return;
   }
 
-  // Pendiente — puede subir
   document.getElementById('state-pending').classList.remove('hidden');
 }
 
@@ -306,13 +339,12 @@ document.getElementById('send-photo-btn').addEventListener('click', async () => 
 
     registros[key] = {
       fecha: key,
-      objetivo: OBJETIVO_ACTIVO.id,
+      objetivo: objetivoActivo.id,
       estado: 'enviado',
       fotoUrl: url,
       timestamp: Date.now(),
     };
     guardarRegistros();
-
     actualizarEstadoUsuario();
     renderHistorialUsuario();
   } catch (err) {
@@ -352,9 +384,11 @@ document.getElementById('logout-user').addEventListener('click', cerrarSesion);
 //  VISTA ADMIN
 // ═══════════════════════════════════════════════════════════════
 
-function iniciarAdmin() {
+async function iniciarAdmin() {
+  await cargarConfigRemota();
   renderAdminPendientes();
   renderAdminHistorial();
+  renderConfigPanel();
 }
 
 function renderAdminPendientes() {
@@ -390,12 +424,9 @@ function renderAdminHistorial() {
 }
 
 function tarjetaRevision(r, conAcciones) {
-  const badgeClass = r.estado === 'aprobado' ? 'badge-ok'
-                   : r.estado === 'rechazado' ? 'badge-bad'
-                   : 'badge-sent';
-  const badgeTexto = r.estado === 'aprobado' ? 'Aprobado'
-                   : r.estado === 'rechazado' ? 'Rechazado'
-                   : 'Pendiente';
+  const obj = appConfig.objetivos.find(o => o.id === r.objetivo) || objetivoActivo;
+  const badgeClass = r.estado === 'aprobado' ? 'badge-ok' : r.estado === 'rechazado' ? 'badge-bad' : 'badge-sent';
+  const badgeTexto = r.estado === 'aprobado' ? 'Aprobado' : r.estado === 'rechazado' ? 'Rechazado' : 'Pendiente';
 
   const acciones = conAcciones ? `
     <div class="review-card-actions">
@@ -410,7 +441,7 @@ function tarjetaRevision(r, conAcciones) {
     <div class="review-card">
       <div class="review-card-header">
         <span class="review-card-date">${formatearFecha(r.fecha)}</span>
-        <span class="review-card-obj">${OBJETIVO_ACTIVO.emoji} ${OBJETIVO_ACTIVO.titulo}</span>
+        <span class="review-card-obj">${obj.emoji} ${obj.titulo}</span>
       </div>
       <img src="${r.fotoUrl}" alt="foto del objetivo" loading="lazy" />
       ${acciones}
@@ -421,17 +452,181 @@ function aprobarRegistro(key) {
   if (!registros[key]) return;
   registros[key].estado = 'aprobado';
   guardarRegistros();
-  iniciarAdmin();
+  renderAdminPendientes();
+  renderAdminHistorial();
 }
 
 function rechazarRegistro(key) {
   if (!registros[key]) return;
   registros[key].estado = 'rechazado';
   guardarRegistros();
-  iniciarAdmin();
+  renderAdminPendientes();
+  renderAdminHistorial();
 }
 
 document.getElementById('logout-admin').addEventListener('click', cerrarSesion);
+
+// ═══════════════════════════════════════════════════════════════
+//  PANEL DE CONFIGURACIÓN
+// ═══════════════════════════════════════════════════════════════
+
+function renderConfigPanel() {
+  // Horario
+  document.getElementById('cfg-hora-inicio').value = appConfig.horaInicio;
+  document.getElementById('cfg-hora-fin').value    = appConfig.horaFin;
+
+  // Lista de objetivos
+  renderListaObjetivos();
+
+  // Select objetivo activo
+  renderSelectActivo();
+}
+
+function renderListaObjetivos() {
+  const lista = document.getElementById('cfg-objetivos-lista');
+  if (appConfig.objetivos.length === 0) {
+    lista.innerHTML = '<p class="empty-msg">No hay objetivos cargados.</p>';
+    return;
+  }
+
+  lista.innerHTML = appConfig.objetivos.map((o, i) => `
+    <div class="cfg-obj-item">
+      <span class="cfg-obj-emoji">${o.emoji}</span>
+      <div class="cfg-obj-info">
+        <strong>${o.titulo}</strong>
+        <small>${o.descripcion}</small>
+      </div>
+      ${appConfig.objetivos.length > 1
+        ? `<button class="btn-ghost btn-small cfg-eliminar-obj" data-index="${i}">✕</button>`
+        : ''}
+    </div>
+  `).join('');
+
+  lista.querySelectorAll('.cfg-eliminar-obj').forEach(btn => {
+    btn.addEventListener('click', () => eliminarObjetivo(parseInt(btn.dataset.index)));
+  });
+}
+
+function renderSelectActivo() {
+  const select = document.getElementById('cfg-objetivo-activo');
+  select.innerHTML = appConfig.objetivos.map(o =>
+    `<option value="${o.id}" ${o.id === appConfig.objetivoActivoId ? 'selected' : ''}>${o.emoji} ${o.titulo}</option>`
+  ).join('');
+}
+
+// Guardar horario
+document.getElementById('cfg-guardar-horario').addEventListener('click', async () => {
+  const inicio = parseInt(document.getElementById('cfg-hora-inicio').value);
+  const fin    = parseInt(document.getElementById('cfg-hora-fin').value);
+  const status = document.getElementById('cfg-horario-status');
+
+  if (isNaN(inicio) || isNaN(fin) || inicio >= fin || inicio < 0 || fin > 23) {
+    mostrarStatus(status, '❌ Horario inválido. Inicio debe ser menor que fin (0-23).', false);
+    return;
+  }
+
+  appConfig.horaInicio = inicio;
+  appConfig.horaFin    = fin;
+
+  try {
+    document.getElementById('cfg-guardar-horario').disabled = true;
+    document.getElementById('cfg-guardar-horario').textContent = 'Guardando...';
+    await guardarConfigRemota();
+    mostrarStatus(status, `✅ Horario guardado: ${inicio}:00 – ${fin}:00 hs`, true);
+  } catch (e) {
+    mostrarStatus(status, `❌ Error: ${e.message}`, false);
+  } finally {
+    document.getElementById('cfg-guardar-horario').disabled = false;
+    document.getElementById('cfg-guardar-horario').textContent = 'Guardar horario';
+  }
+});
+
+// Agregar objetivo
+document.getElementById('cfg-agregar-obj').addEventListener('click', async () => {
+  const emoji  = document.getElementById('cfg-obj-emoji').value.trim();
+  const titulo = document.getElementById('cfg-obj-titulo').value.trim();
+  const desc   = document.getElementById('cfg-obj-desc').value.trim();
+  const status = document.getElementById('cfg-obj-status');
+
+  if (!emoji || !titulo || !desc) {
+    mostrarStatus(status, '❌ Completá todos los campos.', false);
+    return;
+  }
+
+  const id = titulo.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+  if (appConfig.objetivos.find(o => o.id === id)) {
+    mostrarStatus(status, '❌ Ya existe un objetivo con ese nombre.', false);
+    return;
+  }
+
+  appConfig.objetivos.push({ id, titulo, descripcion: desc, emoji });
+
+  try {
+    document.getElementById('cfg-agregar-obj').disabled = true;
+    document.getElementById('cfg-agregar-obj').textContent = 'Guardando...';
+    await guardarConfigRemota();
+    document.getElementById('cfg-obj-emoji').value  = '';
+    document.getElementById('cfg-obj-titulo').value = '';
+    document.getElementById('cfg-obj-desc').value   = '';
+    renderListaObjetivos();
+    renderSelectActivo();
+    mostrarStatus(status, '✅ Objetivo agregado.', true);
+  } catch (e) {
+    appConfig.objetivos.pop();
+    mostrarStatus(status, `❌ Error: ${e.message}`, false);
+  } finally {
+    document.getElementById('cfg-agregar-obj').disabled = false;
+    document.getElementById('cfg-agregar-obj').textContent = 'Agregar objetivo';
+  }
+});
+
+// Eliminar objetivo
+async function eliminarObjetivo(index) {
+  const obj = appConfig.objetivos[index];
+  if (obj.id === appConfig.objetivoActivoId) {
+    alert('No podés eliminar el objetivo activo. Cambiá el activo primero.');
+    return;
+  }
+  if (!confirm(`¿Eliminar "${obj.titulo}"?`)) return;
+
+  const eliminado = appConfig.objetivos.splice(index, 1)[0];
+  try {
+    await guardarConfigRemota();
+    renderListaObjetivos();
+    renderSelectActivo();
+  } catch (e) {
+    appConfig.objetivos.splice(index, 0, eliminado);
+    alert(`Error al eliminar: ${e.message}`);
+  }
+}
+
+// Guardar objetivo activo
+document.getElementById('cfg-guardar-activo').addEventListener('click', async () => {
+  const id     = document.getElementById('cfg-objetivo-activo').value;
+  const status = document.getElementById('cfg-activo-status');
+
+  appConfig.objetivoActivoId = id;
+  objetivoActivo = appConfig.objetivos.find(o => o.id === id) || appConfig.objetivos[0];
+
+  try {
+    document.getElementById('cfg-guardar-activo').disabled = true;
+    document.getElementById('cfg-guardar-activo').textContent = 'Guardando...';
+    await guardarConfigRemota();
+    mostrarStatus(status, `✅ Objetivo activo: ${objetivoActivo.emoji} ${objetivoActivo.titulo}`, true);
+  } catch (e) {
+    mostrarStatus(status, `❌ Error: ${e.message}`, false);
+  } finally {
+    document.getElementById('cfg-guardar-activo').disabled = false;
+    document.getElementById('cfg-guardar-activo').textContent = 'Guardar';
+  }
+});
+
+function mostrarStatus(el, msg, ok) {
+  el.textContent = msg;
+  el.className = `config-status ${ok ? 'config-status-ok' : 'config-status-err'}`;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 4000);
+}
 
 // ═══════════════════════════════════════════════════════════════
 //  LOGOUT

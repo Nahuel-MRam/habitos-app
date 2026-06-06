@@ -43,12 +43,18 @@
         <h2 class="day-title" id="user-date-title">—</h2>
       </section>
 
+      <!-- Cargando config -->
+      <div id="user-loading" class="status-box status-rest">
+        <span class="status-icon">⏳</span>
+        <p>Cargando...</p>
+      </div>
+
       <!-- Objetivo del día -->
-      <section id="objective-card" class="obj-card">
+      <section id="objective-card" class="obj-card hidden">
         <div class="obj-tag">OBJETIVO DEL DÍA</div>
         <h3 class="obj-title" id="obj-title">Caminata diaria</h3>
         <p class="obj-desc" id="obj-desc">Salí a caminar y sacá una foto del lugar al que llegaste.</p>
-        <div class="obj-time" id="obj-time">⏰ Horario: 7:00 – 9:00 hs</div>
+        <div class="obj-time" id="obj-time">⏰ Horario: 7:00 – 21:00 hs</div>
 
         <!-- Estado: pendiente -->
         <div id="state-pending" class="upload-area">
@@ -72,7 +78,7 @@
         <!-- Estado: aprobado -->
         <div id="state-approved" class="status-box status-ok hidden">
           <span class="status-icon">✅</span>
-          <p>¡Objetivo completado! +10 puntos</p>
+          <p id="state-approved-msg">¡Objetivo completado! +10 puntos</p>
         </div>
 
         <!-- Estado: rechazado -->
@@ -95,7 +101,7 @@
       </section>
 
       <!-- Historial -->
-      <section class="history-section">
+      <section id="user-history-section" class="history-section hidden">
         <h4 class="section-label">Historial reciente</h4>
         <ul id="history-list" class="history-list">
           <li class="history-empty">Todavía no hay registros.</li>
@@ -139,6 +145,54 @@
         <div id="admin-history-list" class="review-list">
           <p class="empty-msg">Sin registros aún.</p>
         </div>
+      </section>
+
+      <!-- ═══ CONFIGURACIÓN ═══ -->
+      <section class="admin-section config-section">
+        <h4 class="section-label">Configuración</h4>
+
+        <!-- Horario -->
+        <div class="config-card">
+          <h5 class="config-card-title">⏰ Horario de entrega</h5>
+          <div class="config-row">
+            <div class="config-field">
+              <label>Desde</label>
+              <input type="number" id="cfg-hora-inicio" min="0" max="23" placeholder="7" />
+              <span class="config-unit">hs</span>
+            </div>
+            <div class="config-field">
+              <label>Hasta</label>
+              <input type="number" id="cfg-hora-fin" min="0" max="23" placeholder="21" />
+              <span class="config-unit">hs</span>
+            </div>
+          </div>
+          <button class="btn-primary" id="cfg-guardar-horario">Guardar horario</button>
+          <p id="cfg-horario-status" class="config-status hidden"></p>
+        </div>
+
+        <!-- Objetivos -->
+        <div class="config-card">
+          <h5 class="config-card-title">🎯 Objetivos</h5>
+          <div id="cfg-objetivos-lista" class="cfg-objetivos-lista"></div>
+          <div class="cfg-nuevo-objetivo">
+            <h6 class="cfg-nuevo-titulo">Agregar nuevo objetivo</h6>
+            <input type="text" id="cfg-obj-emoji"  placeholder="emoji (ej: 📖)" maxlength="4" />
+            <input type="text" id="cfg-obj-titulo" placeholder="Título (ej: Leer 20 minutos)" />
+            <textarea id="cfg-obj-desc" placeholder="Descripción del objetivo..." rows="2"></textarea>
+            <button class="btn-primary" id="cfg-agregar-obj">Agregar objetivo</button>
+            <p id="cfg-obj-status" class="config-status hidden"></p>
+          </div>
+        </div>
+
+        <!-- Objetivo activo -->
+        <div class="config-card">
+          <h5 class="config-card-title">✅ Objetivo activo</h5>
+          <p class="config-hint">El objetivo activo es el que ve tu amigo hoy.</p>
+          <select id="cfg-objetivo-activo"></select>
+          <button class="btn-primary" id="cfg-guardar-activo">Guardar</button>
+          <p id="cfg-activo-status" class="config-status hidden"></p>
+        </div>
+
       </section>
 
     </main>

@@ -429,6 +429,150 @@ body {
 .badge-sent { background: rgba(96,165,250,.15);  color: var(--sent); border: 1px solid rgba(96,165,250,.3); }
 
 /* ═══════════════════════════════════════════════
+   CONFIGURACIÓN ADMIN
+═══════════════════════════════════════════════ */
+.config-section { gap: 1rem; display: flex; flex-direction: column; }
+
+.config-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.2rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: .9rem;
+}
+
+.config-card-title {
+  font-size: .88rem;
+  font-weight: 700;
+  color: var(--accent2);
+  letter-spacing: .5px;
+}
+
+.config-hint {
+  font-size: .82rem;
+  color: var(--text-muted);
+}
+
+.config-row {
+  display: flex;
+  gap: 1rem;
+}
+
+.config-field {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex: 1;
+}
+
+.config-field label {
+  font-size: .82rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.config-field input,
+.config-card input[type="text"],
+.config-card textarea,
+.config-card select {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: .65rem .9rem;
+  color: var(--text);
+  font-family: 'Space Mono', monospace;
+  font-size: .85rem;
+  outline: none;
+  transition: border-color .2s;
+}
+
+.config-field input {
+  width: 70px;
+}
+
+.config-field input:focus,
+.config-card input[type="text"]:focus,
+.config-card textarea:focus,
+.config-card select:focus {
+  border-color: var(--accent);
+}
+
+.config-card textarea { resize: vertical; min-height: 60px; }
+
+.config-card select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right .9rem center;
+  padding-right: 2.2rem;
+}
+
+.config-unit { font-size: .8rem; color: var(--text-muted); }
+
+.config-status {
+  font-size: .82rem;
+  font-family: 'Space Mono', monospace;
+  padding: .5rem .8rem;
+  border-radius: 8px;
+}
+
+.config-status-ok  { background: rgba(74,222,128,.1);  color: var(--ok);  border: 1px solid rgba(74,222,128,.2); }
+.config-status-err { background: rgba(248,113,113,.1); color: var(--bad); border: 1px solid rgba(248,113,113,.2); }
+
+/* Lista de objetivos */
+.cfg-objetivos-lista {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+
+.cfg-obj-item {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: .7rem .9rem;
+}
+
+.cfg-obj-emoji { font-size: 1.3rem; flex-shrink: 0; }
+
+.cfg-obj-info {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.cfg-obj-info strong { font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cfg-obj-info small  { font-size: .75rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.btn-small { padding: .35rem .65rem; font-size: .75rem; flex-shrink: 0; }
+
+/* Nuevo objetivo */
+.cfg-nuevo-objetivo {
+  display: flex;
+  flex-direction: column;
+  gap: .7rem;
+  border-top: 1px solid var(--border);
+  padding-top: .9rem;
+}
+
+.cfg-nuevo-titulo {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* ═══════════════════════════════════════════════
    UTILS
 ═══════════════════════════════════════════════ */
 .hidden { display: none !important; }
