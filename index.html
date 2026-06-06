@@ -9,6 +9,19 @@
 </head>
 <body>
 
+  <!-- ═══════════════════════════════ SETUP TOKEN ══════════════════════════ -->
+  <div id="screen-token" class="screen">
+    <div class="login-wrap">
+      <div class="login-badge">🔑</div>
+      <h1 class="login-title">Configuración</h1>
+      <p class="login-sub">Primera vez como admin. Ingresá tu GitHub token para continuar.</p>
+      <input id="token-input" type="password" placeholder="ghp_..." autocomplete="off" />
+      <button id="token-btn" class="btn-primary">Guardar token</button>
+      <p id="token-error" class="error-msg hidden">Token inválido o sin acceso al repo.</p>
+      <p class="config-hint" style="text-align:center;margin-top:.5rem">El token se guarda solo en tu navegador, nunca en GitHub.</p>
+    </div>
+  </div>
+
   <!-- ═══════════════════════════════ LOGIN ═══════════════════════════════ -->
   <div id="screen-login" class="screen active">
     <div class="login-wrap">
@@ -37,26 +50,22 @@
 
     <main class="user-main">
 
-      <!-- Encabezado de día -->
       <section class="day-header">
         <p class="day-label" id="user-day-label">Hoy</p>
         <h2 class="day-title" id="user-date-title">—</h2>
       </section>
 
-      <!-- Cargando config -->
       <div id="user-loading" class="status-box status-rest">
         <span class="status-icon">⏳</span>
         <p>Cargando...</p>
       </div>
 
-      <!-- Objetivo del día -->
       <section id="objective-card" class="obj-card hidden">
         <div class="obj-tag">OBJETIVO DEL DÍA</div>
         <h3 class="obj-title" id="obj-title">Caminata diaria</h3>
         <p class="obj-desc" id="obj-desc">Salí a caminar y sacá una foto del lugar al que llegaste.</p>
         <div class="obj-time" id="obj-time">⏰ Horario: 7:00 – 21:00 hs</div>
 
-        <!-- Estado: pendiente -->
         <div id="state-pending" class="upload-area">
           <p class="upload-hint">📷 Subí tu foto para completar el objetivo</p>
           <input type="file" id="photo-input" accept="image/*" capture="environment" hidden />
@@ -69,38 +78,32 @@
           <p id="upload-status" class="upload-status hidden"></p>
         </div>
 
-        <!-- Estado: enviado (esperando aprobación) -->
         <div id="state-sent" class="status-box status-sent hidden">
           <span class="status-icon">⏳</span>
           <p>Foto enviada. Esperando aprobación...</p>
         </div>
 
-        <!-- Estado: aprobado -->
         <div id="state-approved" class="status-box status-ok hidden">
           <span class="status-icon">✅</span>
           <p id="state-approved-msg">¡Objetivo completado! +10 puntos</p>
         </div>
 
-        <!-- Estado: rechazado -->
         <div id="state-rejected" class="status-box status-bad hidden">
           <span class="status-icon">❌</span>
           <p>Foto rechazada. Intentá de nuevo.</p>
         </div>
 
-        <!-- Fuera de horario -->
         <div id="state-out-of-time" class="status-box status-warn hidden">
           <span class="status-icon">🕐</span>
           <p id="out-of-time-msg">El horario de entrega ya pasó para hoy.</p>
         </div>
 
-        <!-- Fin de semana -->
         <div id="state-weekend" class="status-box status-rest hidden">
           <span class="status-icon">😴</span>
           <p>Hoy es día de descanso. ¡Volvé el lunes!</p>
         </div>
       </section>
 
-      <!-- Historial -->
       <section id="user-history-section" class="history-section hidden">
         <h4 class="section-label">Historial reciente</h4>
         <ul id="history-list" class="history-list">
@@ -131,7 +134,6 @@
         <p class="admin-sub">Revisá las fotos enviadas y aprobá o rechazá cada objetivo.</p>
       </section>
 
-      <!-- Pendientes -->
       <section class="admin-section">
         <h4 class="section-label">Pendientes de revisión</h4>
         <div id="pending-list" class="review-list">
@@ -139,7 +141,6 @@
         </div>
       </section>
 
-      <!-- Historial admin -->
       <section class="admin-section">
         <h4 class="section-label">Historial completo</h4>
         <div id="admin-history-list" class="review-list">
@@ -147,11 +148,10 @@
         </div>
       </section>
 
-      <!-- ═══ CONFIGURACIÓN ═══ -->
+      <!-- CONFIGURACIÓN -->
       <section class="admin-section config-section">
         <h4 class="section-label">Configuración</h4>
 
-        <!-- Horario -->
         <div class="config-card">
           <h5 class="config-card-title">⏰ Horario de entrega</h5>
           <div class="config-row">
@@ -170,7 +170,6 @@
           <p id="cfg-horario-status" class="config-status hidden"></p>
         </div>
 
-        <!-- Objetivos -->
         <div class="config-card">
           <h5 class="config-card-title">🎯 Objetivos</h5>
           <div id="cfg-objetivos-lista" class="cfg-objetivos-lista"></div>
@@ -184,13 +183,20 @@
           </div>
         </div>
 
-        <!-- Objetivo activo -->
         <div class="config-card">
           <h5 class="config-card-title">✅ Objetivo activo</h5>
           <p class="config-hint">El objetivo activo es el que ve tu amigo hoy.</p>
           <select id="cfg-objetivo-activo"></select>
           <button class="btn-primary" id="cfg-guardar-activo">Guardar</button>
           <p id="cfg-activo-status" class="config-status hidden"></p>
+        </div>
+
+        <div class="config-card">
+          <h5 class="config-card-title">🔑 Token de GitHub</h5>
+          <p class="config-hint">Si necesitás actualizar el token, ingresalo acá.</p>
+          <input type="password" id="cfg-token-input" placeholder="ghp_..." />
+          <button class="btn-primary" id="cfg-guardar-token">Actualizar token</button>
+          <p id="cfg-token-status" class="config-status hidden"></p>
         </div>
 
       </section>

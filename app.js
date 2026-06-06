@@ -1,15 +1,26 @@
 // ═══════════════════════════════════════════════════════════════
-//  CONFIGURACIÓN BASE  ← Solo contraseñas y credenciales GitHub
+//  CONFIGURACIÓN BASE  ← Solo contraseñas y datos de GitHub
 // ═══════════════════════════════════════════════════════════════
 
 const CONFIG = {
-  PASSWORD_USER:  "soyadulto",
-  PASSWORD_ADMIN: "admin2026",
-  GITHUB_TOKEN:   "",
+  PASSWORD_USER:  "caminata2025",
+  PASSWORD_ADMIN: "admin_habitos_2025",
   GITHUB_USER:    "Nahuel-MRam",
   GITHUB_REPO:    "habitos-storage",
   PUNTOS_POR_OBJETIVO: 10,
 };
+
+// ═══════════════════════════════════════════════════════════════
+//  TOKEN  — se guarda en localStorage del admin, nunca en GitHub
+// ═══════════════════════════════════════════════════════════════
+
+function getToken() {
+  return localStorage.getItem('habitos_admin_token') || "";
+}
+
+function setToken(token) {
+  localStorage.setItem('habitos_admin_token', token);
+}
 
 // ═══════════════════════════════════════════════════════════════
 //  CONFIG DINÁMICA  (se carga desde GitHub, editable desde admin)
@@ -41,7 +52,7 @@ let selectedFile = null;
 let registros = cargarRegistros();
 
 // ═══════════════════════════════════════════════════════════════
-//  GITHUB CONFIG — leer y guardar config.json en habitos-storage
+//  GITHUB CONFIG
 // ═══════════════════════════════════════════════════════════════
 
 const CONFIG_PATH = "config.json";
@@ -50,9 +61,9 @@ const CONFIG_URL  = `https://api.github.com/repos/${CONFIG.GITHUB_USER}/${CONFIG
 async function cargarConfigRemota() {
   try {
     const res = await fetch(CONFIG_URL, {
-      headers: { 'Authorization': `token ${CONFIG.GITHUB_TOKEN}` }
+      headers: { 'Authorization': `token ${getToken()}` }
     });
-    if (!res.ok) return; // Si no existe aún, usa defaults
+    if (!res.ok) return;
     const data = await res.json();
     const texto = atob(data.content.replace(/\n/g, ''));
     const parsed = JSON.parse(texto);
@@ -64,11 +75,10 @@ async function cargarConfigRemota() {
 }
 
 async function guardarConfigRemota() {
-  // Necesitamos el SHA del archivo si ya existe (para actualizarlo)
   let sha = null;
   try {
     const res = await fetch(CONFIG_URL, {
-      headers: { 'Authorization': `token ${CONFIG.GITHUB_TOKEN}` }
+      headers: { 'Authorization': `token ${getToken()}` }
     });
     if (res.ok) {
       const data = await res.json();
@@ -83,7 +93,7 @@ async function guardarConfigRemota() {
   const res = await fetch(CONFIG_URL, {
     method: 'PUT',
     headers: {
-      'Authorization': `token ${CONFIG.GITHUB_TOKEN}`,
+      'Authorization': `token ${getToken()}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
@@ -92,6 +102,18 @@ async function guardarConfigRemota() {
   if (!res.ok) {
     const err = await res.json();
     throw new Error(err.message || 'Error al guardar config');
+  }
+}
+
+async function validarToken(token) {
+  const url = `https://api.github.com/repos/${CONFIG.GITHUB_USER}/${CONFIG.GITHUB_REPO}`;
+  try {
+    const res = await fetch(url, {
+      headers: { 'Authorization': `token ${token}` }
+    });
+    return res.ok;
+  } catch {
+    return false;
   }
 }
 
@@ -165,7 +187,7 @@ async function subirFotoGitHub(file, key) {
         const res = await fetch(url, {
           method: 'PUT',
           headers: {
-            'Authorization': `token ${CONFIG.GITHUB_TOKEN}`,
+            'Authorization': `token ${getToken()}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ message: `foto ${key}`, content: base64 }),
@@ -196,6 +218,41 @@ function mostrarPantalla(id) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  SETUP TOKEN (primera vez como admin)
+// ═══════════════════════════════════════════════════════════════
+
+document.getElementById('token-btn').addEventListener('click', guardarTokenInicial);
+document.getElementById('token-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') guardarTokenInicial();
+});
+
+async function guardarTokenInicial() {
+  const token = document.getElementById('token-input').value.trim();
+  const error = document.getElementById('token-error');
+  const btn   = document.getElementById('token-btn');
+
+  if (!token) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Verificando...';
+
+  const valido = await validarToken(token);
+
+  if (valido) {
+    setToken(token);
+    document.getElementById('token-input').value = '';
+    error.classList.add('hidden');
+    iniciarAdmin();
+    mostrarPantalla('screen-admin');
+  } else {
+    error.classList.remove('hidden');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Guardar token';
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  LOGIN
 // ═══════════════════════════════════════════════════════════════
 
@@ -205,24 +262,32 @@ document.getElementById('login-input').addEventListener('keydown', e => {
 });
 
 function hacerLogin() {
-  const pass = document.getElementById('login-input').value.trim();
+  const pass  = document.getElementById('login-input').value.trim();
   const error = document.getElementById('login-error');
 
   if (pass === CONFIG.PASSWORD_ADMIN) {
     rol = 'admin';
     error.classList.add('hidden');
-    mostrarPantalla('screen-admin');
-    iniciarAdmin();
+    document.getElementById('login-input').value = '';
+
+    // Si ya tiene token guardado, va directo al panel
+    if (getToken()) {
+      iniciarAdmin();
+      mostrarPantalla('screen-admin');
+    } else {
+      mostrarPantalla('screen-token');
+    }
+
   } else if (pass === CONFIG.PASSWORD_USER) {
     rol = 'user';
     error.classList.add('hidden');
+    document.getElementById('login-input').value = '';
     mostrarPantalla('screen-user');
     iniciarUsuario();
+
   } else {
     error.classList.remove('hidden');
   }
-
-  document.getElementById('login-input').value = '';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -243,8 +308,8 @@ async function iniciarUsuario() {
   document.getElementById('user-history-section').classList.remove('hidden');
 
   document.getElementById('obj-title').textContent = objetivoActivo.titulo;
-  document.getElementById('obj-desc').textContent = objetivoActivo.descripcion;
-  document.getElementById('obj-time').textContent = `⏰ Horario: ${appConfig.horaInicio}:00 – ${appConfig.horaFin}:00 hs`;
+  document.getElementById('obj-desc').textContent  = objetivoActivo.descripcion;
+  document.getElementById('obj-time').textContent  = `⏰ Horario: ${appConfig.horaInicio}:00 – ${appConfig.horaFin}:00 hs`;
   document.getElementById('user-points-display').textContent = `${totalPuntos()} pts`;
 
   actualizarEstadoUsuario();
@@ -252,7 +317,7 @@ async function iniciarUsuario() {
 }
 
 function actualizarEstadoUsuario() {
-  const key = hoyKey();
+  const key      = hoyKey();
   const registro = registros[key];
 
   ['state-pending','state-sent','state-approved','state-rejected','state-out-of-time','state-weekend'].forEach(id => {
@@ -283,7 +348,7 @@ function actualizarEstadoUsuario() {
 
   if (!estaEnHorario()) {
     const msg = document.getElementById('out-of-time-msg');
-    const h = new Date().getHours();
+    const h   = new Date().getHours();
     msg.textContent = h < appConfig.horaInicio
       ? `El horario de entrega empieza a las ${appConfig.horaInicio}:00 hs.`
       : `El horario de entrega ya pasó para hoy.`;
@@ -294,7 +359,6 @@ function actualizarEstadoUsuario() {
   document.getElementById('state-pending').classList.remove('hidden');
 }
 
-// Subida de foto
 document.getElementById('pick-photo-btn').addEventListener('click', () => {
   document.getElementById('photo-input').click();
 });
@@ -325,10 +389,10 @@ document.getElementById('change-photo-btn').addEventListener('click', () => {
 document.getElementById('send-photo-btn').addEventListener('click', async () => {
   if (!selectedFile) return;
 
-  const btn = document.getElementById('send-photo-btn');
+  const btn    = document.getElementById('send-photo-btn');
   const status = document.getElementById('upload-status');
 
-  btn.disabled = true;
+  btn.disabled    = true;
   btn.textContent = 'Subiendo...';
   status.textContent = 'Subiendo foto a GitHub...';
   status.classList.remove('hidden');
@@ -348,9 +412,9 @@ document.getElementById('send-photo-btn').addEventListener('click', async () => 
     actualizarEstadoUsuario();
     renderHistorialUsuario();
   } catch (err) {
-    status.textContent = `Error: ${err.message}`;
-    btn.disabled = false;
-    btn.textContent = 'Reintentar';
+    status.textContent  = `Error: ${err.message}`;
+    btn.disabled        = false;
+    btn.textContent     = 'Reintentar';
   }
 });
 
@@ -424,9 +488,9 @@ function renderAdminHistorial() {
 }
 
 function tarjetaRevision(r, conAcciones) {
-  const obj = appConfig.objetivos.find(o => o.id === r.objetivo) || objetivoActivo;
+  const obj       = appConfig.objetivos.find(o => o.id === r.objetivo) || objetivoActivo;
   const badgeClass = r.estado === 'aprobado' ? 'badge-ok' : r.estado === 'rechazado' ? 'badge-bad' : 'badge-sent';
-  const badgeTexto = r.estado === 'aprobado' ? 'Aprobado' : r.estado === 'rechazado' ? 'Rechazado' : 'Pendiente';
+  const badgeTexto = r.estado === 'aprobado' ? 'Aprobado'  : r.estado === 'rechazado' ? 'Rechazado' : 'Pendiente';
 
   const acciones = conAcciones ? `
     <div class="review-card-actions">
@@ -471,14 +535,9 @@ document.getElementById('logout-admin').addEventListener('click', cerrarSesion);
 // ═══════════════════════════════════════════════════════════════
 
 function renderConfigPanel() {
-  // Horario
   document.getElementById('cfg-hora-inicio').value = appConfig.horaInicio;
   document.getElementById('cfg-hora-fin').value    = appConfig.horaFin;
-
-  // Lista de objetivos
   renderListaObjetivos();
-
-  // Select objetivo activo
   renderSelectActivo();
 }
 
@@ -514,7 +573,6 @@ function renderSelectActivo() {
   ).join('');
 }
 
-// Guardar horario
 document.getElementById('cfg-guardar-horario').addEventListener('click', async () => {
   const inicio = parseInt(document.getElementById('cfg-hora-inicio').value);
   const fin    = parseInt(document.getElementById('cfg-hora-fin').value);
@@ -529,19 +587,18 @@ document.getElementById('cfg-guardar-horario').addEventListener('click', async (
   appConfig.horaFin    = fin;
 
   try {
-    document.getElementById('cfg-guardar-horario').disabled = true;
+    document.getElementById('cfg-guardar-horario').disabled    = true;
     document.getElementById('cfg-guardar-horario').textContent = 'Guardando...';
     await guardarConfigRemota();
     mostrarStatus(status, `✅ Horario guardado: ${inicio}:00 – ${fin}:00 hs`, true);
   } catch (e) {
     mostrarStatus(status, `❌ Error: ${e.message}`, false);
   } finally {
-    document.getElementById('cfg-guardar-horario').disabled = false;
+    document.getElementById('cfg-guardar-horario').disabled    = false;
     document.getElementById('cfg-guardar-horario').textContent = 'Guardar horario';
   }
 });
 
-// Agregar objetivo
 document.getElementById('cfg-agregar-obj').addEventListener('click', async () => {
   const emoji  = document.getElementById('cfg-obj-emoji').value.trim();
   const titulo = document.getElementById('cfg-obj-titulo').value.trim();
@@ -562,7 +619,7 @@ document.getElementById('cfg-agregar-obj').addEventListener('click', async () =>
   appConfig.objetivos.push({ id, titulo, descripcion: desc, emoji });
 
   try {
-    document.getElementById('cfg-agregar-obj').disabled = true;
+    document.getElementById('cfg-agregar-obj').disabled    = true;
     document.getElementById('cfg-agregar-obj').textContent = 'Guardando...';
     await guardarConfigRemota();
     document.getElementById('cfg-obj-emoji').value  = '';
@@ -575,12 +632,11 @@ document.getElementById('cfg-agregar-obj').addEventListener('click', async () =>
     appConfig.objetivos.pop();
     mostrarStatus(status, `❌ Error: ${e.message}`, false);
   } finally {
-    document.getElementById('cfg-agregar-obj').disabled = false;
+    document.getElementById('cfg-agregar-obj').disabled    = false;
     document.getElementById('cfg-agregar-obj').textContent = 'Agregar objetivo';
   }
 });
 
-// Eliminar objetivo
 async function eliminarObjetivo(index) {
   const obj = appConfig.objetivos[index];
   if (obj.id === appConfig.objetivoActivoId) {
@@ -600,7 +656,6 @@ async function eliminarObjetivo(index) {
   }
 }
 
-// Guardar objetivo activo
 document.getElementById('cfg-guardar-activo').addEventListener('click', async () => {
   const id     = document.getElementById('cfg-objetivo-activo').value;
   const status = document.getElementById('cfg-activo-status');
@@ -609,21 +664,44 @@ document.getElementById('cfg-guardar-activo').addEventListener('click', async ()
   objetivoActivo = appConfig.objetivos.find(o => o.id === id) || appConfig.objetivos[0];
 
   try {
-    document.getElementById('cfg-guardar-activo').disabled = true;
+    document.getElementById('cfg-guardar-activo').disabled    = true;
     document.getElementById('cfg-guardar-activo').textContent = 'Guardando...';
     await guardarConfigRemota();
     mostrarStatus(status, `✅ Objetivo activo: ${objetivoActivo.emoji} ${objetivoActivo.titulo}`, true);
   } catch (e) {
     mostrarStatus(status, `❌ Error: ${e.message}`, false);
   } finally {
-    document.getElementById('cfg-guardar-activo').disabled = false;
+    document.getElementById('cfg-guardar-activo').disabled    = false;
     document.getElementById('cfg-guardar-activo').textContent = 'Guardar';
   }
 });
 
+document.getElementById('cfg-guardar-token').addEventListener('click', async () => {
+  const token  = document.getElementById('cfg-token-input').value.trim();
+  const status = document.getElementById('cfg-token-status');
+
+  if (!token) return;
+
+  document.getElementById('cfg-guardar-token').disabled    = true;
+  document.getElementById('cfg-guardar-token').textContent = 'Verificando...';
+
+  const valido = await validarToken(token);
+
+  if (valido) {
+    setToken(token);
+    document.getElementById('cfg-token-input').value = '';
+    mostrarStatus(status, '✅ Token actualizado.', true);
+  } else {
+    mostrarStatus(status, '❌ Token inválido o sin acceso al repo.', false);
+  }
+
+  document.getElementById('cfg-guardar-token').disabled    = false;
+  document.getElementById('cfg-guardar-token').textContent = 'Actualizar token';
+});
+
 function mostrarStatus(el, msg, ok) {
   el.textContent = msg;
-  el.className = `config-status ${ok ? 'config-status-ok' : 'config-status-err'}`;
+  el.className   = `config-status ${ok ? 'config-status-ok' : 'config-status-err'}`;
   el.classList.remove('hidden');
   setTimeout(() => el.classList.add('hidden'), 4000);
 }
@@ -633,7 +711,7 @@ function mostrarStatus(el, msg, ok) {
 // ═══════════════════════════════════════════════════════════════
 
 function cerrarSesion() {
-  rol = null;
+  rol          = null;
   selectedFile = null;
   mostrarPantalla('screen-login');
 }
