@@ -51,44 +51,17 @@
 
     <main class="user-main">
 
-      <!-- Fecha estilo WA -->
       <div class="day-header">
         <span class="day-chip" id="user-day-chip">Hoy</span>
       </div>
 
-      <!-- Loading -->
       <div id="user-loading" class="status-box status-rest">
         <span class="status-icon">⏳</span><p>Cargando...</p>
       </div>
 
-      <!-- Burbuja objetivo -->
-      <section id="objective-card" class="obj-card hidden">
-        <div class="obj-tag">OBJETIVO DEL DÍA</div>
-        <h3 class="obj-title" id="obj-title"></h3>
-        <p class="obj-desc"  id="obj-desc"></p>
-        <div class="obj-time" id="obj-time"></div>
+      <!-- Lista de objetivos del día -->
+      <div id="objectives-list" class="hidden"></div>
 
-        <div id="state-pending" class="upload-area hidden">
-          <p class="upload-hint">📷 Subí tu foto para completar el objetivo</p>
-          <input type="file" id="photo-input" accept="image/*" capture="environment" hidden />
-          <button class="btn-primary" id="pick-photo-btn">Elegir foto</button>
-          <div id="preview-wrap" class="preview-wrap hidden">
-            <img id="photo-preview" src="" alt="preview" />
-            <button class="btn-primary" id="send-photo-btn">Enviar foto ✓</button>
-            <button class="btn-ghost"   id="change-photo-btn">Cambiar</button>
-          </div>
-          <p id="upload-status" class="upload-status hidden"></p>
-        </div>
-
-        <div id="state-sent"       class="status-box status-sent hidden"><span class="status-icon">⏳</span><p>Foto enviada. Esperando aprobación...</p></div>
-        <div id="state-approved"   class="status-box status-ok   hidden"><span class="status-icon">✅</span><p id="state-approved-msg">¡Objetivo completado!</p></div>
-        <div id="state-rejected"   class="status-box status-bad  hidden"><span class="status-icon">❌</span><p>Foto rechazada. Intentá de nuevo.</p></div>
-        <div id="state-out-of-time" class="status-box status-warn hidden"><span class="status-icon">🕐</span><p id="out-of-time-msg"></p></div>
-        <div id="state-no-objetivo" class="status-box status-rest hidden"><span class="status-icon">📅</span><p>Hoy no tenés objetivo. ¡Descansá!</p></div>
-        <div id="state-weekend"    class="status-box status-rest  hidden"><span class="status-icon">😴</span><p>Día de descanso. ¡Volvé el lunes!</p></div>
-      </section>
-
-      <!-- Historial -->
       <section id="user-history-section" class="history-section hidden">
         <div class="section-label">HISTORIAL</div>
         <ul id="history-list" class="history-list">
@@ -173,15 +146,6 @@
             <button class="btn-primary" id="cfg-agregar-obj">Agregar objetivo</button>
             <p id="cfg-obj-status" class="config-status hidden"></p>
           </div>
-        </div>
-
-        <!-- Objetivo activo -->
-        <div class="config-card">
-          <div class="config-card-title">✅ Objetivo activo</div>
-          <p class="config-hint">El objetivo activo es el que ve tu amigo hoy.</p>
-          <select id="cfg-objetivo-activo"></select>
-          <button class="btn-primary" id="cfg-guardar-activo">Guardar</button>
-          <p id="cfg-activo-status" class="config-status hidden"></p>
         </div>
 
         <!-- Token -->
