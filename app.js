@@ -4,7 +4,7 @@
 
 const CONFIG = {
   PASSWORD_USER:  "soyfeliz",
-  PASSWORD_ADMIN: "admin",
+  PASSWORD_ADMIN: "admin2026",
   GITHUB_USER:    "Nahuel-MRam",
   GITHUB_REPO:    "habitos-storage",
   PUNTOS_POR_OBJETIVO: 10,
