@@ -4,7 +4,7 @@
 
 const CONFIG = {
   PASSWORD_USER:  "soyfeliz",
-  PASSWORD_ADMIN: "admin2026",
+  PASSWORD_ADMIN: "admin",
   GITHUB_USER:    "Nahuel-MRam",
   GITHUB_REPO:    "habitos-storage",
   PUNTOS_POR_OBJETIVO: 10,
@@ -270,7 +270,9 @@ async function guardarTokenInicial() {
   btn.disabled = true; btn.textContent = 'Verificando...';
   if (await validarToken(token)) {
     setToken(token); document.getElementById('token-input').value = '';
-    error.classList.add('hidden'); iniciarAdmin(); mostrarPantalla('screen-admin');
+    error.classList.add('hidden');
+    if (rol === 'admin') { iniciarAdmin(); mostrarPantalla('screen-admin'); }
+    else { mostrarPantalla('screen-user'); iniciarUsuario(); }
   } else { error.classList.remove('hidden'); }
   btn.disabled = false; btn.textContent = 'Guardar token';
 }
@@ -293,7 +295,8 @@ function hacerLogin() {
   } else if (pass === CONFIG.PASSWORD_USER) {
     rol = 'user'; error.classList.add('hidden');
     document.getElementById('login-input').value = '';
-    mostrarPantalla('screen-user'); iniciarUsuario();
+    if (getToken()) { mostrarPantalla('screen-user'); iniciarUsuario(); }
+    else mostrarPantalla('screen-token');
   } else { error.classList.remove('hidden'); }
 }
 
