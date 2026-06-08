@@ -214,7 +214,7 @@ body { background: var(--bg); color: var(--text); min-height: 100dvh; overflow-x
 .config-card { background: var(--surface); border: 1px solid var(--divider); border-radius: var(--radius); padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: .8rem; }
 .config-card-title { font-size: .82rem; font-weight: 700; color: var(--accent-light); padding-bottom: .5rem; border-bottom: 1px solid var(--divider); }
 .config-hint { font-size: .8rem; color: var(--text-muted); }
-.config-row  { display: flex; gap: .8rem; }
+.config-row { display: flex; flex-direction: column; gap: .6rem; }
 .config-field { display: flex; align-items: center; gap: .45rem; flex: 1; }
 .config-field label { font-size: .8rem; color: var(--text-muted); white-space: nowrap; }
 
@@ -227,7 +227,7 @@ body { background: var(--bg); color: var(--text); min-height: 100dvh; overflow-x
   border-radius: var(--radius-xs); padding: .6rem .85rem; color: var(--text);
   font-family: inherit; font-size: .88rem; outline: none; transition: border-color .2s;
 }
-.config-field input { width: 65px; text-align: center; }
+.config-field input { width: 60px; text-align: center; }
 .config-field input:focus,
 .config-card input[type="text"]:focus,
 .config-card input[type="password"]:focus,
