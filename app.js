@@ -83,7 +83,10 @@ async function ghGet(url) {
 // ═══════════════════════════════════════════════════════════════
 
 async function ghPut(url, content, sha, message) {
-  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(content, null, 2))));
+  const json    = JSON.stringify(content, null, 2);
+  const bytes   = new TextEncoder().encode(json);
+  const binary  = Array.from(bytes).map(b => String.fromCharCode(b)).join('');
+  const encoded = btoa(binary);
   const body    = { message, content: encoded };
   if (sha) body.sha = sha;
   const res = await fetch(url, { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) });
