@@ -444,7 +444,7 @@ function uploadAreaHTML(objId) {
   return `
     <div class="upload-area" id="upload-area-${objId}">
       <p class="upload-hint">📷 Subí tu foto para completar el objetivo</p>
-      <input type="file" id="file-${objId}" accept="image/*" capture="environment" hidden />
+      <input type="file" id="file-${objId}" accept="image/*" hidden />
       <button class="btn-primary" id="pick-${objId}">Elegir foto</button>
       <div id="preview-wrap-${objId}" class="preview-wrap hidden">
         <img id="preview-img-${objId}" src="" alt="preview" />
