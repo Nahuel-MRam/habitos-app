@@ -31,8 +31,8 @@ const CONFIG_DEFAULT = {
       titulo: "Caminata diaria",
       descripcion: "Salí a caminar y sacá una foto del lugar al que llegaste.",
       emoji: "🏃",
-      horaInicio: 7,
-      horaFin: 21,
+      horaInicio: 7, minInicio: 0,
+      horaFin: 21,   minFin: 0,
       dias: [1,2,3,4,5],
       activo: true,
     }
@@ -104,7 +104,7 @@ async function cargarConfigRemota() {
     if (!data) return;
     appConfig = { ...CONFIG_DEFAULT, ...data.content };
     appConfig.objetivos = appConfig.objetivos.map(o => ({
-      dias: [1,2,3,4,5], horaInicio: 7, horaFin: 21, activo: true, ...o
+      dias: [1,2,3,4,5], horaInicio: 7, minInicio: 0, horaFin: 21, minFin: 0, activo: true, ...o
     }));
   } catch (e) { console.warn('Config no disponible:', e); }
 }
@@ -170,11 +170,15 @@ function formatearFecha(key) {
   return `${partes[2]}/${partes[1]}/${partes[0]}`;
 }
 function estaEnHorario(obj) {
-  const h = new Date().getHours();
-  return h >= obj.horaInicio && h < obj.horaFin;
+  const ahora   = new Date();
+  const totalMin = ahora.getHours() * 60 + ahora.getMinutes();
+  const inicio  = obj.horaInicio * 60 + (obj.minInicio || 0);
+  const fin     = obj.horaFin   * 60 + (obj.minFin    || 0);
+  return totalMin >= inicio && totalMin < fin;
 }
 function tiempoRestante(obj) {
-  const fin  = new Date(); fin.setHours(obj.horaFin, 0, 0, 0);
+  const fin = new Date();
+  fin.setHours(obj.horaFin, obj.minFin || 0, 0, 0);
   const diff = fin - Date.now();
   if (diff <= 0) return null;
   const h = Math.floor(diff / 3600000);
@@ -433,7 +437,7 @@ function renderTarjetaObjetivo(obj, hoy) {
       <h3 class="obj-title">${obj.titulo}</h3>
       <p class="obj-desc">${obj.descripcion}</p>
       <div class="obj-time-row">
-        <span class="obj-time">⏰ ${obj.horaInicio}:00 – ${obj.horaFin}:00 hs</span>
+        <span class="obj-time">⏰ ${String(obj.horaInicio).padStart(2,'0')}:${String(obj.minInicio||0).padStart(2,'0')} – ${String(obj.horaFin).padStart(2,'0')}:${String(obj.minFin||0).padStart(2,'0')} hs</span>
         ${timerStr}
       </div>
       ${contenido}
@@ -594,9 +598,28 @@ function renderListaObjetivos() {
         ${appConfig.objetivos.length > 1 ? `<button class="btn-ghost btn-small cfg-eliminar-obj" data-index="${i}">✕</button>` : ''}
       </div>
       <div class="cfg-obj-horario">
+        <!-- Editar título, emoji y descripción -->
+        <div class="cfg-inline-row">
+          <input type="text" class="cfg-edit-emoji" data-index="${i}" value="${o.emoji}" maxlength="4" style="width:60px;flex-shrink:0" />
+          <input type="text" class="cfg-edit-titulo" data-index="${i}" value="${o.titulo}" style="flex:1" />
+        </div>
+        <textarea class="cfg-edit-desc" data-index="${i}" rows="2">${o.descripcion}</textarea>
+        <!-- Horario con minutos -->
         <div class="config-row">
-          <div class="config-field"><label>Desde</label><input type="number" class="cfg-obj-inicio" data-index="${i}" min="0" max="23" value="${o.horaInicio}"/><span class="config-unit">hs</span></div>
-          <div class="config-field"><label>Hasta</label><input type="number" class="cfg-obj-fin" data-index="${i}" min="0" max="23" value="${o.horaFin}"/><span class="config-unit">hs</span></div>
+          <div class="config-field">
+            <label>Desde</label>
+            <input type="number" class="cfg-obj-inicio" data-index="${i}" min="0" max="23" value="${o.horaInicio}" style="width:50px"/>
+            <span class="config-unit">h</span>
+            <input type="number" class="cfg-obj-min-inicio" data-index="${i}" min="0" max="59" value="${o.minInicio||0}" style="width:50px"/>
+            <span class="config-unit">m</span>
+          </div>
+          <div class="config-field">
+            <label>Hasta</label>
+            <input type="number" class="cfg-obj-fin" data-index="${i}" min="0" max="23" value="${o.horaFin}" style="width:50px"/>
+            <span class="config-unit">h</span>
+            <input type="number" class="cfg-obj-min-fin" data-index="${i}" min="0" max="59" value="${o.minFin||0}" style="width:50px"/>
+            <span class="config-unit">m</span>
+          </div>
         </div>
         <div class="dias-wrap">${checkboxesDias(o.dias)}</div>
         <button class="btn-primary cfg-guardar-obj" data-index="${i}">Guardar cambios</button>
@@ -616,18 +639,32 @@ async function toggleActivo(index, activo) {
 }
 
 async function guardarCambiosObjetivo(index) {
-  const obj    = appConfig.objetivos[index];
-  const inicio = parseInt(document.querySelector(`.cfg-obj-inicio[data-index="${index}"]`).value);
-  const fin    = parseInt(document.querySelector(`.cfg-obj-fin[data-index="${index}"]`).value);
-  const items  = document.querySelectorAll('.cfg-obj-item-full');
-  const dias   = [...items[index].querySelectorAll('.dias-wrap input:checked')].map(cb => parseInt(cb.value));
-  const status = document.getElementById(`cfg-obj-status-${index}`);
-  if (isNaN(inicio) || isNaN(fin) || inicio >= fin) { mostrarStatus(status, '❌ Horario inválido.', false); return; }
+  const obj      = appConfig.objetivos[index];
+  const emoji    = document.querySelector(`.cfg-edit-emoji[data-index="${index}"]`).value.trim();
+  const titulo   = document.querySelector(`.cfg-edit-titulo[data-index="${index}"]`).value.trim();
+  const desc     = document.querySelector(`.cfg-edit-desc[data-index="${index}"]`).value.trim();
+  const inicio   = parseInt(document.querySelector(`.cfg-obj-inicio[data-index="${index}"]`).value);
+  const minIni   = parseInt(document.querySelector(`.cfg-obj-min-inicio[data-index="${index}"]`).value) || 0;
+  const fin      = parseInt(document.querySelector(`.cfg-obj-fin[data-index="${index}"]`).value);
+  const minFin   = parseInt(document.querySelector(`.cfg-obj-min-fin[data-index="${index}"]`).value) || 0;
+  const items    = document.querySelectorAll('.cfg-obj-item-full');
+  const dias     = [...items[index].querySelectorAll('.dias-wrap input:checked')].map(cb => parseInt(cb.value));
+  const status   = document.getElementById(`cfg-obj-status-${index}`);
+
+  if (!emoji || !titulo || !desc) { mostrarStatus(status, '❌ Completá título, emoji y descripción.', false); return; }
+  const totalInicio = inicio * 60 + minIni;
+  const totalFin    = fin    * 60 + minFin;
+  if (isNaN(inicio) || isNaN(fin) || totalInicio >= totalFin) { mostrarStatus(status, '❌ Horario inválido.', false); return; }
   if (!dias.length) { mostrarStatus(status, '❌ Seleccioná al menos un día.', false); return; }
-  obj.horaInicio = inicio; obj.horaFin = fin; obj.dias = dias;
+
+  obj.emoji = emoji; obj.titulo = titulo; obj.descripcion = desc;
+  obj.horaInicio = inicio; obj.minInicio = minIni;
+  obj.horaFin    = fin;    obj.minFin    = minFin;
+  obj.dias = dias;
+
   const btn = document.querySelector(`.cfg-guardar-obj[data-index="${index}"]`);
   btn.disabled = true; btn.textContent = 'Guardando...';
-  try { await guardarConfigRemota(); mostrarStatus(status, '✅ Guardado.', true); }
+  try { await guardarConfigRemota(); mostrarStatus(status, '✅ Guardado.', true); renderListaObjetivos(); }
   catch (e) { mostrarStatus(status, `❌ ${e.message}`, false); }
   finally { btn.disabled = false; btn.textContent = 'Guardar cambios'; }
 }
@@ -636,16 +673,20 @@ document.getElementById('cfg-agregar-obj').addEventListener('click', async () =>
   const emoji  = document.getElementById('cfg-obj-emoji').value.trim();
   const titulo = document.getElementById('cfg-obj-titulo').value.trim();
   const desc   = document.getElementById('cfg-obj-desc').value.trim();
-  const inicio = parseInt(document.getElementById('cfg-obj-inicio').value);
-  const fin    = parseInt(document.getElementById('cfg-obj-fin').value);
-  const dias   = [...document.querySelectorAll('#cfg-nuevo-dias input:checked')].map(cb => parseInt(cb.value));
-  const status = document.getElementById('cfg-obj-status');
+  const inicio  = parseInt(document.getElementById('cfg-obj-inicio').value);
+  const minIni  = parseInt(document.getElementById('cfg-obj-min-inicio').value) || 0;
+  const fin     = parseInt(document.getElementById('cfg-obj-fin').value);
+  const minFin  = parseInt(document.getElementById('cfg-obj-min-fin').value) || 0;
+  const dias    = [...document.querySelectorAll('#cfg-nuevo-dias input:checked')].map(cb => parseInt(cb.value));
+  const status  = document.getElementById('cfg-obj-status');
   if (!emoji || !titulo || !desc) { mostrarStatus(status, '❌ Completá todos los campos.', false); return; }
-  if (isNaN(inicio) || isNaN(fin) || inicio >= fin) { mostrarStatus(status, '❌ Horario inválido.', false); return; }
+  const totalInicio = inicio * 60 + minIni;
+  const totalFin    = fin    * 60 + minFin;
+  if (isNaN(inicio) || isNaN(fin) || totalInicio >= totalFin) { mostrarStatus(status, '❌ Horario inválido.', false); return; }
   if (!dias.length) { mostrarStatus(status, '❌ Seleccioná al menos un día.', false); return; }
   const id = titulo.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
   if (appConfig.objetivos.find(o => o.id === id)) { mostrarStatus(status, '❌ Ya existe ese objetivo.', false); return; }
-  appConfig.objetivos.push({ id, titulo, descripcion: desc, emoji, horaInicio: inicio, horaFin: fin, dias, activo: true });
+  appConfig.objetivos.push({ id, titulo, descripcion: desc, emoji, horaInicio: inicio, minInicio: minIni, horaFin: fin, minFin: minFin, dias, activo: true });
   const btn = document.getElementById('cfg-agregar-obj');
   btn.disabled = true; btn.textContent = 'Guardando...';
   try {
@@ -654,7 +695,9 @@ document.getElementById('cfg-agregar-obj').addEventListener('click', async () =>
     document.getElementById('cfg-obj-titulo').value = '';
     document.getElementById('cfg-obj-desc').value = '';
     document.getElementById('cfg-obj-inicio').value = '7';
+    document.getElementById('cfg-obj-min-inicio').value = '0';
     document.getElementById('cfg-obj-fin').value = '21';
+    document.getElementById('cfg-obj-min-fin').value = '0';
     document.querySelectorAll('#cfg-nuevo-dias input').forEach(cb => { cb.checked = [1,2,3,4,5].includes(parseInt(cb.value)); });
     renderListaObjetivos();
     mostrarStatus(status, '✅ Objetivo agregado.', true);
